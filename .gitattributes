@@ -1,0 +1,13 @@
+# Normalise line endings. Without this, files committed from Windows carry CRLF
+# and shell scripts fail on Linux runners with "bad interpreter: ^M".
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.tf   text eol=lf
+*.hcl  text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.md   text eol=lf
+
+*.png binary
+*.jpg binary

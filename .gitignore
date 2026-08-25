@@ -1,0 +1,60 @@
+# ---------------------------------------------------------------------------
+# Credentials — never commit. Listed first because it matters most.
+# ---------------------------------------------------------------------------
+*accessKeys*.csv
+*credentials*.csv
+*.csv
+credentials
+.env
+.env.*
+*.pem
+*.key
+!**/*.pub
+
+# ---------------------------------------------------------------------------
+# Terraform
+# ---------------------------------------------------------------------------
+.terraform/
+.terraform.tfstate.lock.info
+
+# State must live in S3, never in git. Bootstrap keeps local state only
+# between its first apply and the -migrate-state step.
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Saved plan files can contain resolved secret values.
+*.tfplan
+tfplan
+plan.out
+plan.txt
+plan.json
+
+# Real variable values. The committed template is .tfvars.example (negated below).
+*.tfvars
+*.tfvars.json
+!*.tfvars.example
+
+# Dependency lock files ARE committed — they pin provider hashes and are a
+# supply-chain control. Do not add .terraform.lock.hcl here.
+
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# ---------------------------------------------------------------------------
+# Tooling / OS
+# ---------------------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
+.idea/
+.vscode/
+!.vscode/extensions.json
