@@ -1,220 +1,97 @@
-# impel-infra-main
+# impel-terraform-modules
 
-Terraform infrastructure-as-code for the Impel AWS estate, deployed exclusively
-through GitHub Actions. One directory per AWS account.
+Versioned, reusable Terraform modules for the Impel AWS estate.
 
-| Account | ID | State bucket | Apply gate |
-|---|---|---|---|
-| Impel (DEV) | `867264375510` | `impel-tfstate-dev` | `aws-dev` — any team member |
-| Impel (production) | `338510628891` | `impel-tfstate-prod` | `aws-prod` — `platform-approvers`, no self-approval |
+This repository holds **blueprints only**. It deploys nothing and owns no
+state. The live configurations that call these modules are:
 
-Region `ap-southeast-1` (Singapore). Terraform `>= 1.10` for S3-native state
-locking. Production is also the AWS Organizations management account.
+| Repository | Account |
+|---|---|
+| [impel-infra-dev](https://github.com/UseImpel/impel-infra-dev) | `867264375510` |
+| [impel-infra-prod](https://github.com/UseImpel/impel-infra-prod) | `338510628891` |
 
-## Layout
+Program-level docs live in [impel-infra](https://github.com/UseImpel/impel-infra).
 
-```
-accounts/                 Live deployments. One directory = one AWS account.
-  dev/                    → 867264375510
-  prod/                   → 338510628891
-  shared-services/        → placeholder; the account does not exist yet
+## Consuming a module
 
-modules/                  Reusable blueprints, called by relative path. No
-                          hardcoded environment values — see modules/README.md.
-
-scripts/
-  bootstrap-account.sh    Creates the state backend and CI roles via the AWS
-                          CLI. Deliberately NOT Terraform — see below.
-
-docs/bootstrap.md         What the bootstrap layer creates and how to verify it.
-docs/service-deployments.md
-                          How application code reaches a running service, and
-                          which side owns which half.
-```
-
-An account directory is five files — `backend.tf`, `providers.tf`,
-`variables.tf`, `versions.tf`, `main.tf` — and `main.tf` is composition only:
-it calls modules, it does not define resources.
+Modules are consumed by **immutable tag**, never by branch:
 
 ```hcl
 module "vpc" {
-  source = "../../modules/vpc"
+  source = "git::https://github.com/UseImpel/impel-terraform-modules.git//modules/vpc?ref=v1.0.0"
 
-  environment = var.environment
-  cidr_block  = "10.10.0.0/16"
+  name = "impel-platform-dev"
+  # ...
 }
 ```
 
-`accounts/dev` holds a scaled-down replica of the four prod SEA services —
-gateway, next, identity and sessions — behind one shared load balancer. See
-[`docs/dev-sea-replica-status.md`](docs/dev-sea-replica-status.md) for what is
-running and what is left. `accounts/prod` manages four ECR repositories and
-nothing else; the rest of that account is still CDK-owned.
+The `?ref=` is not optional. Without it, `terraform init` resolves the default
+branch, so an unrelated merge here silently changes a consumer's plan — and a
+plan a reviewer approved stops matching the code that applies. CI in both live
+repositories fails on an unpinned source (`terraform_module_pinned_source`).
 
-## Deployment model
+Current release: **`v1.0.0`** — a straight extraction of the modules from
+`impel-infra-main`, with no refactoring.
 
-Nobody runs `terraform apply` from a laptop.
+### Taking a new version
 
-```
-push (any branch)
-  └─ lint ──────────► fmt · validate · tflint · trivy · checkov
+Bump the `?ref=` in the consuming repository and open a PR there. The plan on
+that PR shows exactly what the new version changes, per account. Dev and prod
+upgrade independently and deliberately; nothing here propagates on its own.
 
-pull request → main
-  ├─ lint                                                    [required check]
-  ├─ plan ──────────► terraform plan → posted as a PR comment
-  │                   (on failure, the error output is posted too)
-  └─ review approval + CODEOWNERS
+## Modules
 
-merge to main
-  └─ plan  ─────────► fresh plan from the merged commit, saved as an artifact
-     ⏸  manual approval on the aws-<env> environment
-     └─ apply ──────► terraform apply <saved plan>
-```
+| Module | Purpose |
+|---|---|
+| `acm-certificate` | DNS-validated ACM certificate for a load balancer |
+| `alb` | Application Load Balancer — `:80` redirects to `:443` |
+| `app-bucket` | Private application bucket with its own CMK, TLS-only, versioned |
+| `aurora-serverless` | Aurora PostgreSQL Serverless v2 cluster |
+| `ecr-repo` | ECR repository with lifecycle policy and optional cross-account pull |
+| `ecs-cluster` | Fargate ECS cluster |
+| `ecs-service` | One Fargate service, end to end — the workhorse module |
+| `github-deploy-role` | Identity an application repo assumes to ship one service |
+| `memorydb` | MemoryDB Redis cluster with TLS and a named ACL user |
+| `service-secret` | Secrets Manager secret whose *shape* Terraform owns, not its values |
+| `valkey` | ElastiCache Valkey replication group |
+| `vpc` | Two-tier VPC for ECS Fargate workloads |
 
-The apply job consumes the **saved binary plan file**, so what a reviewer
-approves is byte-for-byte what executes.
-
-### One pipeline per environment
-
-Dev and prod have separate workflows, not one matrix over both:
-
-```
-.github/workflows/
-  lint.yml         shared — no AWS credentials, runs with -backend=false
-  _plan.yml        reusable: the plan logic, called by both
-  _apply.yml       reusable: the plan → gate → apply logic, called by both
-  plan-dev.yml     accounts/dev/**   → DEV_PLAN_ROLE_ARN
-  apply-dev.yml    accounts/dev/**   → aws-dev  gate
-  plan-prod.yml    accounts/prod/**  → PROD_PLAN_ROLE_ARN
-  apply-prod.yml   accounts/prod/**  → aws-prod gate
-```
-
-Each environment owns its `concurrency` group, so **a prod apply waiting on a
-reviewer can never hold up a dev apply**. Under the old shared matrix
-(`max-parallel: 1`) it could, and did. The `_`-prefixed files hold the logic so
-a fix lands in one place instead of four; the per-environment files are ~30
-lines of wiring each.
-
-Only the account a PR touches is planned. A change under `modules/` or
-`.github/actions/` triggers **both** pipelines independently, because shared
-code reaches every account.
-
-### Why the gate is enforced by IAM, not just GitHub
-
-Each apply role's trust policy accepts exactly one OIDC subject:
-`repo:UseImpel/impel-infra-main:environment:aws-<env>`. GitHub issues a token
-with that subject **only after** the environment's reviewer gate passes. A
-workflow that skips the gate cannot obtain apply credentials — even if someone
-edits the workflow file. The gate is a property of the cloud, not of a YAML
-file.
-
-Dev and prod differ only in who may approve:
-
-| | `aws-dev` | `aws-prod` |
-|---|---|---|
-| Reviewers | `@UseImpel/fde` (whole team) | `@UseImpel/platform-approvers` |
-| Self-approval | allowed | blocked |
-| Effect | one click, fast feedback | two distinct humans |
-
-## Bootstrap is not Terraform
-
-Terraform cannot create the bucket it stores its own state in, nor the role it
-assumes in order to run. That layer — OIDC provider, state bucket, KMS CMK,
-plan and apply roles — is created by `scripts/bootstrap-account.sh` with the
-AWS CLI.
-
-The script is idempotent: re-running it is how you repair drift, and it is safe
-to run at any time. Read [`docs/bootstrap.md`](docs/bootstrap.md) before
-touching it — it also documents the two `Deny` statements that stop an apply
-from destroying its own state or removing its own gate.
-
-## Brownfield note
-
-The production account already runs CDK stacks (`impelbuzz`, `impelsea`), ECS
-services, ALBs, ~20 buckets and seven `*-github-deploy` roles. **None of it is
-managed here.** Terraform will not adopt or destroy anything it did not create.
-Existing resources are adopted one `import` block at a time, with a plan
-showing `0 to add, 0 to change, 0 to destroy` before anyone trusts it.
-
-## Linting before you push
-
-Requires Python 3.9+ and Terraform on your `PATH`.
-
-**Setup — once per clone:**
-
-```bash
-pip install pre-commit
-pre-commit install          # optional: also run on every `git commit`
-```
-
-**Run:**
-
-```bash
-pre-commit run --all-files
-```
-
-The first run downloads the hook environments and takes a minute or two; after
-that it is a few seconds. Most failures are **auto-fixed** — the hook rewrites
-the file and reports `Failed`. Re-run to confirm it passes, then commit the
-result. Bypass a single commit with `git commit --no-verify`.
-
-### Deeper checks run in CI
-
-`pre-commit` covers formatting only. The `lint` workflow additionally runs
-`terraform validate`, `tflint`, `trivy` and `checkov` — it is a required check,
-so a PR cannot merge until it is green.
-
-To run those locally (each tool is a separate install):
-
-```bash
-# terraform validate — no AWS credentials needed, touches no state
-terraform -chdir=accounts/dev init -backend=false
-terraform -chdir=accounts/dev validate
-
-# checkov
-pip install checkov
-checkov -d . --framework terraform --compact --quiet
-
-# tflint and trivy
-choco install tflint trivy      # Windows
-brew install tflint trivy       # macOS
-tflint --init && tflint --recursive --format compact
-trivy config . --severity HIGH,CRITICAL
-```
-
-If Checkov flags something you have deliberately accepted, add a skip **inside**
-the resource block with a reason — placed above the block it is silently
-ignored:
-
-```hcl
-resource "aws_s3_bucket" "example" {
-  #checkov:skip=CKV_AWS_18:Access logging needs a second bucket; CloudTrail covers this.
-  bucket = "..."
-}
-```
+Each module has its own README with inputs, outputs, and the live resource it
+was shaped after.
 
 ## Conventions
 
-- **Naming** — `impel-<component>-<env>`; CI roles follow
-  `impel-infra-<env>-github-<purpose>`.
-- **Tagging** — applied once via provider `default_tags` and inherited by every
-  resource: `ManagedBy`, `Repository`, `Environment`, `Owner`. No per-resource
-  tag blocks.
-- **Guardrail** — every account sets `allowed_account_ids`, so Terraform
-  refuses to run against the wrong account rather than silently applying dev
-  config to prod.
-- **Modules** — typed variables with `description` and `validation`; every
-  module ships a `README.md` and `versions.tf`. No hardcoded account IDs,
-  regions or environment names.
-- **State** — one state file per account, in that account's own bucket. Never
-  commit state or `.tfvars`.
+- **No environment values.** A module takes names, CIDRs and sizes as inputs;
+  it never hardcodes an account, a region, or an environment. If a module needs
+  to know whether it is dev or prod, the interface is wrong.
+- **No provider blocks.** Modules inherit the provider from the calling root,
+  which is what lets one module serve both accounts.
+- **No backends.** These are not root configurations.
+- **Naming** — resources are named `impel-<component>-<env>` from a prefix
+  supplied by the caller.
+- **Tagging** — callers set `default_tags` on the provider; modules do not add
+  per-resource tag blocks.
+- **Write modules against real workloads.** Everything here was extracted from
+  the live prod SEA topology. A directory containing a guess at what a resource
+  should look like is worse than no directory, because the guess gets copied.
 
-## Adding an account
+## CI
 
-See [`docs/bootstrap.md`](docs/bootstrap.md#adding-an-account).
+`quality` runs on every PR and push to `main`: `terraform fmt`, then
+`terraform validate` per module (with `-backend=false`, since these are not
+roots), then TFLint, Trivy and Checkov.
 
-It needs two new workflow files — copy `plan-dev.yml` and `apply-dev.yml` and
-change the environment, directory and variable names. That is deliberate: an
-account is not deployable until someone has decided who approves its applies,
-and a copied file makes that decision visible in review. The alternative,
-auto-discovery, silently gave a new directory a pipeline.
+`release` runs on a `v*` tag. It re-runs the full check set and refuses a tag
+that is not semver or not an ancestor of `main`, then publishes a GitHub
+release. It will not overwrite an existing release: consumers pin by tag, so a
+moved tag would hand them different code under a version they already
+reviewed.
+
+## Local checks
+
+```sh
+pre-commit run --all-files
+terraform -chdir=modules/vpc init -backend=false
+terraform -chdir=modules/vpc validate
+tflint --recursive
+```

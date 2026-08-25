@@ -35,8 +35,13 @@ plan.json
 *.tfvars.json
 !*.tfvars.example
 
-# Dependency lock files ARE committed — they pin provider hashes and are a
-# supply-chain control. Do not add .terraform.lock.hcl here.
+# Dependency lock files are a supply-chain control and ARE committed — but only
+# in a ROOT configuration, which this repository has none of. Terraform reads
+# the lock file of the root it is invoked from and ignores the one belonging to
+# a called module, so a lock file here would pin nothing for a consumer while
+# implying that it did. `terraform validate` writes them as a side effect of
+# init; keep them out.
+modules/*/.terraform.lock.hcl
 
 crash.log
 crash.*.log
