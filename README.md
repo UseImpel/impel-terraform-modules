@@ -51,6 +51,7 @@ upgrade independently and deliberately; nothing here propagates on its own.
 | `ecs-cluster` | Fargate ECS cluster |
 | `ecs-service` | One Fargate service, end to end — the workhorse module |
 | `github-deploy-role` | Identity an application repo assumes to ship one service |
+| `inbound-events` | S3 + CMK + FIFO queue and DLQ for a service's inbound event plane |
 | `memorydb` | MemoryDB Redis cluster with TLS and a named ACL user |
 | `service-secret` | Secrets Manager secret whose *shape* Terraform owns, not its values |
 | `valkey` | ElastiCache Valkey replication group |
