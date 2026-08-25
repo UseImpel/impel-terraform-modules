@@ -1,2 +1,12 @@
+# Every module here is called by the production account as well as dev, so a
+# change in this repository reaches prod even though no prod file is touched.
+# That is why this repository is approver-owned in full.
+#
+# This file is only advisory unless the ruleset on `main` has "require review
+# from code owners" enabled.
+
 * @UseImpel/platform-approvers
+
+# Called out explicitly as well as by the catch-all: a change here decides
+# what CI verifies before a tag becomes a release consumers pin to.
 /.github/ @UseImpel/platform-approvers
