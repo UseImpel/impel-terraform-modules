@@ -56,6 +56,7 @@ upgrade independently and deliberately; nothing here propagates on its own.
 | `service-secret` | Secrets Manager secret whose *shape* Terraform owns, not its values |
 | `valkey` | ElastiCache Valkey replication group |
 | `vpc` | Two-tier VPC for ECS Fargate workloads |
+| `workflow-bootstrap` | One-shot Fargate task that runs Workflow schema bootstrap |
 
 Each module has its own README with inputs, outputs, and the live resource it
 was shaped after.

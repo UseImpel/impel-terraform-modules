@@ -22,6 +22,7 @@ prod SEA topology recorded in
 | [`ecr-repo`](ecr-repo/) | Repository, lifecycle policy, optional cross-account pull |
 | [`service-secret`](service-secret/) | Secrets Manager secret whose shape Terraform owns and whose values it does not |
 | [`app-bucket`](app-bucket/) | Private SSE-KMS bucket, lifecycle expiry, and a managed policy for object access |
+| [`workflow-bootstrap`](workflow-bootstrap/) | One-shot Fargate task definition for Workflow schema bootstrap |
 
 ## The contract
 
