@@ -1,0 +1,430 @@
+# The modules pipeline. One workflow, one run, one visible chain:
+#
+#   quality → plan-release → publish (gated) → notify
+#
+# Consumers pin modules by immutable tag (`?ref=v1.2.3`), so a tag here is a
+# release. This file makes the tag the *last* thing that happens: the checks
+# run, an approver looks at the computed version and the diff, and only then
+# does the tag exist. Previously a tag was hand-pushed and CI ran afterwards,
+# which gated the release object while leaving the tag — the thing consumers
+# actually resolve — ungated.
+#
+# That ordering has a second benefit: a rejected release leaves nothing behind
+# and burns no version number. Retagging is the failure mode that matters, and
+# the way to avoid it is to never create the wrong tag in the first place.
+#
+# On a pull request the chain stops after `quality` — there is nothing to
+# release yet. On main it continues to `publish`, which pauses for a reviewer.
+name: modules
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never cancel a run that may be mid-publish: a half-published release (tag
+# pushed, release missing) needs a human to sort out. PR runs are cheap to
+# cancel and safe, so they are keyed separately and do cancel.
+concurrency:
+  group: modules-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TERRAFORM_VERSION: 1.14.4
+  TFLINT_VERSION: v0.64.0
+  SEMVER_VERSION: 7.8.5
+  BUMP_VERSION: 12.1.0
+  BUMP_PRESET_VERSION: 9.1.0
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. quality — formatting, validation, linting, security scanning.
+  #
+  # Every later job needs this one, so the release path runs exactly the checks
+  # a pull request runs. They used to live in two workflows that had drifted:
+  # the release path skipped Trivy and Checkov entirely while the README
+  # claimed it re-ran the full set. One job cannot drift from itself.
+  # ---------------------------------------------------------------------------
+  quality:
+    name: quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The repository squash-merges with the PR title as the commit subject,
+      # so the title is what `plan-release` later parses to derive the version.
+      # Checking it here means a malformed title is a review comment rather
+      # than a surprise at release time.
+      - name: PR title must be a conventional commit
+        if: github.event_name == 'pull_request'
+        uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          types: |
+            feat
+            fix
+            perf
+            docs
+            chore
+            refactor
+            test
+            ci
+            build
+          requireScope: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - uses: terraform-linters/setup-tflint@6e1e0642c0289bd619021bf6b34e3c08ed1e005a # v6.3.0
+        with:
+          tflint_version: ${{ env.TFLINT_VERSION }}
+
+      - name: Format
+        run: terraform fmt -check -recursive -diff
+
+      # Modules are not root configurations: they have no backend and no
+      # provider block, so each is validated on its own with -backend=false.
+      - name: Validate modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r dir; do
+            echo "::group::terraform validate $dir"
+            terraform -chdir="$dir" init -backend=false -input=false
+            terraform -chdir="$dir" validate -no-color
+            echo "::endgroup::"
+          done < <(find modules -mindepth 1 -maxdepth 1 -type d | sort)
+
+      - name: TFLint
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          tflint --init
+          tflint --recursive --format compact
+
+      - name: Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@99bb2caf247dfd9f03cf984373bc6043d4e32ebf # v12.1347.0
+        with:
+          directory: .
+          framework: terraform
+          quiet: true
+          soft_fail: false
+          output_format: cli
+
+  # ---------------------------------------------------------------------------
+  # 2. plan-release — decide the version. Creates nothing.
+  #
+  # The bump is derived from the commit subjects since the last tag using the
+  # Conventional Commits preset, not chosen by whoever is cutting the release.
+  # A version typed from memory is a version that can be wrong, and consumers
+  # upgrade on the strength of what the number claims: `minor` says "your
+  # `terraform init` still works", and only the commits know if that is true.
+  # ---------------------------------------------------------------------------
+  plan-release:
+    name: plan-release
+    needs: quality
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.plan.outputs.release }}
+      version: ${{ steps.plan.outputs.version }}
+      previous: ${{ steps.plan.outputs.previous }}
+      bump: ${{ steps.plan.outputs.bump }}
+    steps:
+      # Full history and tags: the bump is computed from the commit range since
+      # the most recent tag, so a shallow clone would silently see nothing.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
+      # A release must be reachable from main. workflow_dispatch can be aimed
+      # at any ref, and the environment's branch policy is the other half of
+      # this guard — this half fails the run before anything is computed.
+      - name: Commit must be on main
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::${GITHUB_SHA} is not on main."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 # v6.0.0
+        with:
+          node-version: 22
+
+      - name: Install version tooling
+        run: |
+          npm install -g --no-fund --no-audit \
+            "semver@${SEMVER_VERSION}" \
+            "conventional-recommended-bump@${BUMP_VERSION}" \
+            "conventional-changelog-conventionalcommits@${BUMP_PRESET_VERSION}"
+
+      - name: Compute version
+        id: plan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # semver prints its arguments in ascending precedence order, so the
+          # last line is the newest tag. `sort -V` and a lexical sort both get
+          # v1.10.0 vs v1.9.0 wrong, which is a bug that appears exactly once
+          # and at the worst possible moment.
+          previous=$(git tag -l 'v*' | xargs -r semver | tail -n1 || true)
+          previous=${previous:-0.0.0}
+          range="v${previous}..HEAD"
+          if ! git rev-parse -q --verify "v${previous}" >/dev/null; then
+            range=HEAD   # no tags yet: the whole history is the first release
+          fi
+
+          # conventional-recommended-bump answers "how big a bump", never
+          # "should we release at all" — it returns `patch` for a docs-only
+          # range and for an empty one. Deciding release-worthiness is
+          # therefore ours: feat/fix/perf release, as does anything marked
+          # breaking; docs/chore/refactor/test/ci/build do not.
+          subjects=$(git log --format='%s' "$range")
+          bodies=$(git log --format='%B' "$range")
+          if grep -qE '^[a-z]+(\([^)]*\))?!:' <<<"$subjects" \
+             || grep -qE '^BREAKING[ -]CHANGE:' <<<"$bodies" \
+             || grep -qE '^(feat|fix|perf)(\([^)]*\))?!?:' <<<"$subjects"; then
+            release=true
+          else
+            release=false
+          fi
+
+          bump=$(conventional-recommended-bump -p conventionalcommits --tag-prefix v)
+          version="v$(semver -i "$bump" "$previous")"
+
+          # A tag that already exists means someone released this commit while
+          # the run was queued. Stop rather than race the ruleset.
+          if [ "$release" = true ] && git rev-parse -q --verify "$version" >/dev/null; then
+            echo "::error::${version} already exists."
+            exit 1
+          fi
+
+          {
+            echo "release=$release"
+            echo "version=$version"
+            echo "previous=v$previous"
+            echo "bump=$bump"
+          } >> "$GITHUB_OUTPUT"
+
+      # The approver opens the run, not a pull request. Put the version, the
+      # reasoning and the diff on the same screen as the Approve button.
+      - name: Release summary
+        shell: bash
+        env:
+          RELEASE: ${{ steps.plan.outputs.release }}
+          VERSION: ${{ steps.plan.outputs.version }}
+          PREVIOUS: ${{ steps.plan.outputs.previous }}
+          BUMP: ${{ steps.plan.outputs.bump }}
+        run: |
+          set -euo pipefail
+          range="${PREVIOUS}..HEAD"
+          git rev-parse -q --verify "$PREVIOUS" >/dev/null || range=HEAD
+
+          {
+            if [ "$RELEASE" != "true" ]; then
+              echo "## No release"
+              echo ""
+              echo "Nothing since \`${PREVIOUS}\` changes what a consumer gets:"
+              echo "no \`feat\`, \`fix\`, \`perf\` or breaking change."
+              echo ""
+              echo '```'
+              git log --oneline "$range" || true
+              echo '```'
+              exit 0
+            fi
+
+            echo "## Release ${PREVIOUS} → ${VERSION}"
+            echo ""
+            echo "\`${BUMP}\` bump · commit \`$(git rev-parse --short HEAD)\`"
+            echo ""
+            if [ "$BUMP" = "major" ]; then
+              echo "> [!WARNING]"
+              echo "> A **breaking change**. Consumers pinning \`${PREVIOUS}\` will need"
+              echo "> to change their configuration, not just their \`?ref=\`."
+              echo ""
+            fi
+            echo "### Commits"
+            echo '```'
+            git log --oneline "$range"
+            echo '```'
+            echo ""
+            echo "### Modules changed"
+            changed=$(git diff --name-only "$range" -- modules/ | cut -d/ -f2 | sort -u)
+            if [ -n "$changed" ]; then
+              echo '```'
+              echo "$changed"
+              echo '```'
+            else
+              echo "None — no module source changed."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # 3. ⏸ publish — pauses for a reviewer, then creates the tag and release.
+  #
+  # `environment:` is what makes GitHub pause for the `release` reviewers. The
+  # gate is not enforced by this file alone: a ruleset on `refs/tags/v*` blocks
+  # tag creation for everyone except the App whose token is minted below, so
+  # this job is the only path to a tag. Without that ruleset the pause is
+  # decorative, because anyone could still push a tag by hand.
+  #
+  # GITHUB_TOKEN cannot be a ruleset bypass actor — it is not a real identity —
+  # which is why the App exists at all rather than `contents: write` here.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: publish
+    needs: plan-release
+    if: needs.plan-release.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: app-token
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+
+      # Tags as well as history: the release-notes range below checks whether
+      # the previous tag is present before referring to it.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Annotated, to match v1.0.0–v1.2.0 and because a release tag should
+      # carry its own author and date rather than borrowing the commit's.
+      #
+      # This tags the exact SHA that `quality` checked and the approver saw.
+      # Nothing is recomputed after approval.
+      - name: Create tag
+        env:
+          VERSION: ${{ needs.plan-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "impel-release-bot[bot]"
+          git config user.email "impel-release-bot[bot]@users.noreply.github.com"
+          git tag -a "$VERSION" "$GITHUB_SHA" -m "$VERSION"
+          git push origin "$VERSION"
+
+      # Never overwrite an existing release: consumers pin by tag, so a moved
+      # release would hand them different code under a version they already
+      # reviewed.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ needs.plan-release.outputs.version }}
+          PREVIOUS: ${{ needs.plan-release.outputs.previous }}
+        run: |
+          set -euo pipefail
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            echo "Release $VERSION already exists; leaving it untouched."
+            exit 0
+          fi
+
+          # Scope the generated notes to this release. On the very first
+          # release there is no previous tag to start from, and passing one
+          # that does not exist fails the call.
+          notes_from=()
+          if git rev-parse -q --verify "$PREVIOUS" >/dev/null; then
+            notes_from=(--notes-start-tag "$PREVIOUS")
+          fi
+          gh release create "$VERSION" \
+            --title "$VERSION" \
+            --generate-notes \
+            "${notes_from[@]}"
+
+      - name: Job summary
+        env:
+          VERSION: ${{ needs.plan-release.outputs.version }}
+        run: |
+          {
+            echo "## Published \`${VERSION}\`"
+            echo ""
+            echo "Consume it with:"
+            echo ""
+            echo '```hcl'
+            echo 'source = "git::https://github.com/UseImpel/impel-terraform-modules.git//modules/<name>?ref='"${VERSION}"'"'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ---------------------------------------------------------------------------
+  # 4. notify — report the outcome onto the pull request that produced this
+  # commit, so a contributor learns which version carries their change without
+  # watching the Actions tab.
+  # ---------------------------------------------------------------------------
+  notify:
+    name: notify
+    needs: [plan-release, publish]
+    if: always() && github.event_name != 'pull_request' && needs.plan-release.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          PUBLISH_RESULT: ${{ needs.publish.result }}
+          VERSION: ${{ needs.plan-release.outputs.version }}
+          BUMP: ${{ needs.plan-release.outputs.bump }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const { VERSION: version, BUMP: bump, PUBLISH_RESULT: result } = process.env;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+
+            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner, repo, commit_sha: context.sha });
+            if (!prs.data.length) return;
+
+            let body;
+            if (result === 'success') {
+              const releaseUrl = `${context.serverUrl}/${owner}/${repo}/releases/tag/${version}`;
+              body = [
+                `### 🏷️ Released as [\`${version}\`](${releaseUrl})`,
+                '',
+                `A \`${bump}\` bump. Consumers take it by bumping their \`?ref=\`:`,
+                '',
+                '```hcl',
+                `source = "git::https://github.com/${owner}/${repo}.git//modules/<name>?ref=${version}"`,
+                '```',
+              ].join('\n');
+            } else if (result === 'skipped') {
+              body = `### ⏸️ \`${version}\` was not released — the run is awaiting approval, or it was rejected. [View run](${runUrl})`;
+            } else {
+              body = `### ❌ Releasing \`${version}\` failed. The tag may or may not exist — check before retrying. [View run](${runUrl})`;
+            }
+
+            for (const pr of prs.data) {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: pr.number, body });
+            }
