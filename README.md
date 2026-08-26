@@ -30,8 +30,8 @@ branch, so an unrelated merge here silently changes a consumer's plan — and a
 plan a reviewer approved stops matching the code that applies. CI in both live
 repositories fails on an unpinned source (`terraform_module_pinned_source`).
 
-Current release: **`v1.0.0`** — a straight extraction of the modules from
-`impel-infra-main`, with no refactoring.
+The current version is whatever is at the top of
+[releases](https://github.com/UseImpel/impel-terraform-modules/releases).
 
 ### Taking a new version
 
@@ -77,17 +77,59 @@ was shaped after.
   the live prod SEA topology. A directory containing a guess at what a resource
   should look like is worse than no directory, because the guess gets copied.
 
+## Cutting a release
+
+Releases are cut by the pipeline, not by hand. **Merge to `main` with a
+conventional PR title and the release proposes itself** — the version is
+derived from the commits, and the run waits for a `platform-approvers`
+approval before the tag exists.
+
+The PR title decides the bump, because the repository squash-merges and the
+title becomes the commit subject:
+
+| PR title | Bump | Example |
+|---|---|---|
+| `fix:` / `perf:` | patch | `fix: correct the alb health check path` |
+| `feat:` | minor | `feat: add a multi-az input to memorydb` |
+| `feat!:` or a `BREAKING CHANGE:` footer | major | `feat!: drop task_cpu from ecs-service` |
+| `docs:` `chore:` `refactor:` `test:` `ci:` `build:` | none | `docs: fix a typo` |
+
+Use `!` whenever a consumer must change more than their `?ref=` — a removed
+variable or output, or a default dropped so the variable becomes required.
+That is the difference between an upgrade a consumer can take casually and one
+that breaks their `terraform init`, and the version number is how they tell.
+
+A PR whose title is not conventional fails CI, so the convention is caught at
+review time.
+
+To approve: open the run, read the summary — old version, new version, the
+commits behind it and the modules touched — and approve. The tag and release
+are created only then. Rejecting leaves nothing behind and does not burn the
+version number.
+
 ## CI
+
+One workflow, `modules`, runs the whole chain:
+
+```
+quality → plan-release → publish (approval) → notify
+```
 
 `quality` runs on every PR and push to `main`: `terraform fmt`, then
 `terraform validate` per module (with `-backend=false`, since these are not
-roots), then TFLint, Trivy and Checkov.
+roots), then TFLint, Trivy and Checkov. On a PR the chain stops there.
 
-`release` runs on a `v*` tag. It re-runs the full check set and refuses a tag
-that is not semver or not an ancestor of `main`, then publishes a GitHub
-release. It will not overwrite an existing release: consumers pin by tag, so a
-moved tag would hand them different code under a version they already
+`plan-release` derives the next version and stops the run if nothing since the
+last tag changes what a consumer gets. `publish` waits for approval, then
+creates the tag and the release — in that order, so an unreviewed commit is
+never tagged. It will not overwrite an existing release: consumers pin by tag,
+so a moved tag would hand them different code under a version they already
 reviewed.
+
+A ruleset on `refs/tags/v*` blocks tag creation for everyone except the
+release app, which makes this pipeline the only way a `v*` tag can appear. The
+app, the `release` environment and that ruleset are repository settings rather
+than code — see [`.github/RELEASE_SETUP.md`](.github/RELEASE_SETUP.md).
 
 ## Local checks
 

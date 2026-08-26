@@ -3,7 +3,7 @@
 #   pre-commit run --all-files
 #
 # Deeper checks (validate, tflint, trivy, checkov) run in CI — see
-# .github/workflows/lint.yml.
+# .github/workflows/modules.yml.
 
 repos:
   - repo: https://github.com/antonbabenko/pre-commit-terraform
