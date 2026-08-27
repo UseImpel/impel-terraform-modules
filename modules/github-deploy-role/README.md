@@ -29,6 +29,23 @@ module "gateway_deploy" {
 The account's GitHub OIDC provider must already exist. `scripts/bootstrap-account.sh` creates it,
 and there can only be one per issuer per account — this module reads it, never creates it.
 
+Repositories created on or after 2026-07-15 may use GitHub's immutable OIDC subject format, which
+includes the owner and repository IDs. Pass the owner and repository IDs when the repository is
+configured for it; otherwise the module derives the legacy name-based prefix from
+`github_repository`:
+
+```hcl
+github_repository          = "UseImpel/impel-sessions"
+github_oidc_ids            = {
+  owner_id      = 283797627
+  repository_id = 1304531882
+}
+```
+
+The IDs must both be positive. The module derives the prefix from the owner/name in
+`github_repository`, appends `:ref:refs/heads/<deploy_branch>`, and still uses an exact
+(`StringEquals`) trust condition.
+
 ## Using it from the application repository
 
 ```yaml
@@ -54,10 +71,16 @@ different subject and STS refuses it.
 
 ## Why the branch is a property of the cloud
 
-The trust policy accepts one subject:
+The trust policy accepts one subject. For a legacy repository it is:
 
 ```
 repo:UseImpel/impel-gateway:ref:refs/heads/dev
+```
+
+For an immutable-subject repository, it is instead:
+
+```
+repo:UseImpel@283797627/impel-sessions@1304531882:ref:refs/heads/dev
 ```
 
 GitHub puts the ref that triggered the run into the token and signs it. A workflow cannot claim a

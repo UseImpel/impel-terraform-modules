@@ -18,6 +18,26 @@ variable "github_repository" {
   }
 }
 
+variable "github_oidc_ids" {
+  description = "Optional immutable GitHub owner and repository IDs. Set both for repositories using GitHub's immutable OIDC subject format. When null, the legacy name-based prefix is derived from github_repository."
+  type = object({
+    owner_id      = number
+    repository_id = number
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition = var.github_oidc_ids == null || (
+      var.github_oidc_ids.owner_id > 0 &&
+      floor(var.github_oidc_ids.owner_id) == var.github_oidc_ids.owner_id &&
+      var.github_oidc_ids.repository_id > 0 &&
+      floor(var.github_oidc_ids.repository_id) == var.github_oidc_ids.repository_id
+    )
+    error_message = "github_oidc_ids.owner_id and github_oidc_ids.repository_id must both be positive integers."
+  }
+}
+
 variable "deploy_branch" {
   description = "The one branch whose workflow runs may assume this role. Matched exactly, so a pull request from a fork cannot deploy: only a run on this branch gets a token with the matching subject."
   type        = string

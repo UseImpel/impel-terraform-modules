@@ -24,7 +24,20 @@ locals {
 
   # GitHub encodes the ref that minted the token into the subject. This is the
   # whole security boundary, so it is built here rather than taken as a string.
-  subject = "repo:${var.github_repository}:ref:refs/heads/${var.deploy_branch}"
+  # Repositories created after 2026-07-15 use an immutable owner/repository-ID
+  # prefix. Keep the name-based form as the backwards-compatible default for
+  # existing callers, while deriving the immutable prefix from the IDs GitHub
+  # assigns to the owner and repository.
+  repository_owner = split("/", var.github_repository)[0]
+  repository_name  = split("/", var.github_repository)[1]
+  subject_prefix = var.github_oidc_ids == null ? "repo:${var.github_repository}" : format(
+    "repo:%s@%d/%s@%d",
+    local.repository_owner,
+    var.github_oidc_ids.owner_id,
+    local.repository_name,
+    var.github_oidc_ids.repository_id,
+  )
+  subject = "${local.subject_prefix}:ref:refs/heads/${var.deploy_branch}"
 
   service_arn = "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:service/${var.cluster_name}/${var.service_name}"
 }

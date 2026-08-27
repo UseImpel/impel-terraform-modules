@@ -9,6 +9,6 @@ output "role_name" {
 }
 
 output "trusted_subject" {
-  description = "The single OIDC subject the trust policy accepts. A run whose token carries anything else is refused by STS, so this is the exact repository and branch that can deploy."
+  description = "The single OIDC subject the trust policy accepts. This uses the immutable owner/repository-ID prefix when github_oidc_ids is provided, otherwise the legacy name-based prefix. A run whose token carries anything else is refused by STS."
   value       = local.subject
 }
