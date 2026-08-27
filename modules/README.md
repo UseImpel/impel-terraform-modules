@@ -21,6 +21,7 @@ prod SEA topology recorded in
 | [`memorydb`](memorydb/) | MemoryDB Redis cluster, TLS and ACL user (Next cache) |
 | [`ecr-repo`](ecr-repo/) | Repository, lifecycle policy, optional cross-account pull |
 | [`service-secret`](service-secret/) | Secrets Manager secret whose shape Terraform owns and whose values it does not |
+| [`sessions-payload-bucket`](sessions-payload-bucket/) | Private versioned SSE-KMS payload storage with metadata-controlled retention |
 | [`app-bucket`](app-bucket/) | Private SSE-KMS bucket, lifecycle expiry, and a managed policy for object access |
 | [`workflow-bootstrap`](workflow-bootstrap/) | One-shot Fargate task definition for Workflow schema bootstrap |
 
