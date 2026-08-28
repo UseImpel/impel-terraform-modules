@@ -126,8 +126,9 @@ resource "aws_secretsmanager_secret" "rest_token" {
 resource "aws_secretsmanager_secret_version" "rest_token" {
   count = var.create_rest_token_secret ? 1 : 0
 
-  secret_id     = aws_secretsmanager_secret.rest_token[0].id
-  secret_string = random_password.rest_token[0].result
+  secret_id                = aws_secretsmanager_secret.rest_token[0].id
+  secret_string_wo         = random_password.rest_token[0].result
+  secret_string_wo_version = var.rest_token_version
 }
 
 resource "aws_elasticache_replication_group" "this" {
