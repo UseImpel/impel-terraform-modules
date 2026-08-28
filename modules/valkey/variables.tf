@@ -96,3 +96,14 @@ variable "create_rest_token_secret" {
   type        = bool
   default     = false
 }
+
+variable "rest_token_version" {
+  description = "Write-only version marker for the generated REST adapter token. Increment it when rotating the token."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.rest_token_version >= 1 && floor(var.rest_token_version) == var.rest_token_version
+    error_message = "rest_token_version must be a positive integer."
+  }
+}
