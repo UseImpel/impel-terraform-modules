@@ -102,6 +102,34 @@ resource "aws_secretsmanager_secret_version" "auth_token" {
   secret_string = jsonencode({ auth_token = random_password.auth_token.result })
 }
 
+resource "random_password" "rest_token" {
+  count = var.create_rest_token_secret ? 1 : 0
+
+  length  = 48
+  special = false
+}
+
+resource "aws_secretsmanager_secret" "rest_token" {
+  #checkov:skip=CKV2_AWS_57:This adapter token is generated and rotated by replacing the secret version with the consuming ECS service; no rotation Lambda exists for the shared adapter contract.
+  count = var.create_rest_token_secret ? 1 : 0
+
+  name                    = "${var.name}/rest-token"
+  description             = "Bearer token for the Redis REST adapter for ${var.name}."
+  kms_key_id              = aws_kms_key.this.arn
+  recovery_window_in_days = 0
+
+  tags = {
+    Name = "${var.name}-rest-token"
+  }
+}
+
+resource "aws_secretsmanager_secret_version" "rest_token" {
+  count = var.create_rest_token_secret ? 1 : 0
+
+  secret_id     = aws_secretsmanager_secret.rest_token[0].id
+  secret_string = random_password.rest_token[0].result
+}
+
 resource "aws_elasticache_replication_group" "this" {
   #checkov:skip=CKV2_AWS_50:Multi-AZ failover is var.multi_az, true by default. Dev runs single-node, where a failover target would double the cost of a disposable cache.
   replication_group_id = var.name

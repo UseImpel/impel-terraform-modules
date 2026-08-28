@@ -90,3 +90,9 @@ variable "apply_immediately" {
   type        = bool
   default     = false
 }
+
+variable "create_rest_token_secret" {
+  description = "Create a generated plain-string bearer secret for a Redis REST adapter. The token is separate from the Valkey auth token."
+  type        = bool
+  default     = false
+}
