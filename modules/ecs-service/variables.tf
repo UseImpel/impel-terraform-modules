@@ -132,6 +132,65 @@ variable "health_check_start_period" {
   default     = 60
 }
 
+variable "container_stop_timeout" {
+  description = "Seconds ECS waits for the primary container to stop gracefully. Null uses the ECS default; Fargate permits at most 120 seconds."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = var.container_stop_timeout == null || (var.container_stop_timeout >= 2 && var.container_stop_timeout <= 120)
+    error_message = "container_stop_timeout must be null, or between 2 and 120 seconds."
+  }
+}
+
+variable "sidecars" {
+  description = "Additional containers in the task, keyed by a stable label. Sidecars share the task network namespace and may expose loopback ports to the primary container."
+  type = map(object({
+    container_name            = string
+    container_image           = string
+    container_port            = optional(number)
+    command                   = optional(list(string), [])
+    environment_variables     = optional(map(string), {})
+    container_secrets         = optional(map(string), {})
+    health_check_command      = optional(list(string), [])
+    health_check_interval     = optional(number, 30)
+    health_check_timeout      = optional(number, 5)
+    health_check_retries      = optional(number, 3)
+    health_check_start_period = optional(number, 60)
+    readonly_root_filesystem  = optional(bool, false)
+    stop_timeout              = optional(number)
+  }))
+  default = {}
+
+  validation {
+    condition = alltrue(flatten([
+      for sidecar in values(var.sidecars) : [
+        sidecar.container_port == null || (sidecar.container_port > 0 && sidecar.container_port <= 65535),
+        sidecar.health_check_interval >= 5 && sidecar.health_check_interval <= 300,
+        sidecar.health_check_timeout >= 2 && sidecar.health_check_timeout <= 120,
+        sidecar.health_check_retries >= 1 && sidecar.health_check_retries <= 10,
+        sidecar.health_check_start_period >= 0 && sidecar.health_check_start_period <= 300,
+        sidecar.stop_timeout == null || (sidecar.stop_timeout >= 2 && sidecar.stop_timeout <= 120),
+      ]
+    ]))
+    error_message = "Each sidecar must use valid ECS port, health-check, and stop-timeout values."
+  }
+}
+
+variable "container_dependencies" {
+  description = "Dependencies for the primary container. Each dependency names another container in the task and an ECS condition such as HEALTHY or SUCCESS."
+  type = list(object({
+    container_name = string
+    condition      = string
+  }))
+  default = []
+
+  validation {
+    condition     = alltrue([for dependency in var.container_dependencies : contains(["START", "COMPLETE", "SUCCESS", "HEALTHY"], dependency.condition)])
+    error_message = "container_dependencies condition must be START, COMPLETE, SUCCESS, or HEALTHY."
+  }
+}
+
 variable "ephemeral_storage_gib" {
   description = "Task ephemeral storage. Zero uses the 20 GiB Fargate default; prod's next service asks for 30."
   type        = number

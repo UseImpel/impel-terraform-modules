@@ -90,6 +90,32 @@ positional string (`<lb-suffix>/<tg-suffix>`) that is not validated at apply tim
 the policy creates cleanly, then never fires. A `precondition` catches the missing input at plan
 time.
 
+## Sidecars
+
+The task may include optional sidecars. They use the same task network
+namespace, so loopback adapters can be exposed to the primary container
+without opening additional security-group ingress:
+
+```hcl
+sidecars = {
+  redis = {
+    container_name       = "redis-rest-adapter"
+    container_image      = var.container_image
+    container_port       = 8081
+    command              = ["/app/redis-rest-adapter"]
+    health_check_command = ["CMD", "/app/redis-rest-adapter", "healthcheck"]
+  }
+}
+
+container_dependencies = [
+  { container_name = "redis-rest-adapter", condition = "HEALTHY" },
+]
+```
+
+Sidecar secrets are included in the execution-role permissions automatically.
+Use `container_stop_timeout` and each sidecar's `stop_timeout` for workloads
+that need a bounded graceful shutdown.
+
 ## Who deploys new images
 
 Two postures, chosen with `continuous_deployment`.

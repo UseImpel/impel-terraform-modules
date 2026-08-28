@@ -37,3 +37,9 @@ output "kms_key_arn" {
   description = "CMK encrypting the cache at rest and the auth token secret."
   value       = aws_kms_key.this.arn
 }
+
+output "rest_token_secret_arn" {
+  description = "ARN of the optional plain-string bearer token for a Redis REST adapter, or null when create_rest_token_secret is false."
+  value       = one(aws_secretsmanager_secret.rest_token[*].arn)
+  sensitive   = true
+}

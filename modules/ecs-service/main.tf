@@ -6,6 +6,10 @@ data "aws_region" "current" {}
 
 locals {
   log_group_name = coalesce(var.log_group_name, "/ecs/${var.name}/service")
+  all_container_secrets = merge(concat(
+    [var.container_secrets],
+    [for sidecar in values(var.sidecars) : sidecar.container_secrets],
+  )...)
 
   # Drives count on the target group, listener rule and ALB ingress rule, so it
   # must be resolvable at plan time. var.listener_arn is unknown until the load
@@ -57,7 +61,65 @@ locals {
         startPeriod = var.health_check_start_period
       }
     } : {},
+    var.container_stop_timeout != null ? { stopTimeout = var.container_stop_timeout } : {},
+    length(var.container_dependencies) > 0 ? {
+      dependsOn = [
+        for dependency in var.container_dependencies : {
+          containerName = dependency.container_name
+          condition     = dependency.condition
+        }
+      ]
+    } : {},
   )
+
+  sidecar_definitions = [
+    for sidecar in values(var.sidecars) : merge(
+      {
+        name      = sidecar.container_name
+        image     = sidecar.container_image
+        essential = true
+
+        environment = [
+          for k, v in sidecar.environment_variables : { name = k, value = v }
+        ]
+
+        secrets = [
+          for k, v in sidecar.container_secrets : { name = k, valueFrom = v }
+        ]
+
+        logConfiguration = {
+          logDriver = "awslogs"
+          options = {
+            "awslogs-group"         = local.log_group_name
+            "awslogs-region"        = data.aws_region.current.region
+            "awslogs-stream-prefix" = sidecar.container_name
+          }
+        }
+
+        readonlyRootFilesystem = sidecar.readonly_root_filesystem
+      },
+      sidecar.container_port != null ? {
+        portMappings = [{
+          containerPort = sidecar.container_port
+          hostPort      = sidecar.container_port
+          protocol      = "tcp"
+        }]
+      } : {},
+      length(sidecar.command) > 0 ? { command = sidecar.command } : {},
+      length(sidecar.health_check_command) > 0 ? {
+        healthCheck = {
+          command     = sidecar.health_check_command
+          interval    = sidecar.health_check_interval
+          timeout     = sidecar.health_check_timeout
+          retries     = sidecar.health_check_retries
+          startPeriod = sidecar.health_check_start_period
+        }
+      } : {},
+      sidecar.stop_timeout != null ? { stopTimeout = sidecar.stop_timeout } : {},
+    )
+  ]
+
+  container_definitions = concat([local.container_definition], local.sidecar_definitions)
 }
 
 resource "aws_cloudwatch_log_group" "this" {
@@ -131,13 +193,15 @@ data "aws_iam_policy_document" "execution" {
 
   # Scoped to exactly the secrets this task definition names.
   dynamic "statement" {
-    for_each = length(var.container_secrets) > 0 ? [1] : []
+    for_each = length(local.all_container_secrets) > 0 ? [1] : []
 
     content {
-      sid       = "ReadSecrets"
-      effect    = "Allow"
-      actions   = ["secretsmanager:GetSecretValue"]
-      resources = distinct([for v in values(var.container_secrets) : join(":", slice(split(":", v), 0, 7))])
+      sid     = "ReadSecrets"
+      effect  = "Allow"
+      actions = ["secretsmanager:GetSecretValue"]
+      resources = distinct([
+        for v in values(local.all_container_secrets) : length(split(":", v)) > 6 ? join(":", slice(split(":", v), 0, 7)) : v
+      ])
     }
   }
 
@@ -289,7 +353,19 @@ resource "aws_ecs_task_definition" "this" {
     }
   }
 
-  container_definitions = jsonencode([local.container_definition])
+  container_definitions = jsonencode(local.container_definitions)
+
+  lifecycle {
+    precondition {
+      condition     = length(distinct(concat([var.container_name], [for sidecar in values(var.sidecars) : sidecar.container_name]))) == length(var.sidecars) + 1
+      error_message = "The primary container and sidecars must have unique container names."
+    }
+
+    precondition {
+      condition     = alltrue([for dependency in var.container_dependencies : dependency.container_name != var.container_name && contains([for sidecar in values(var.sidecars) : sidecar.container_name], dependency.container_name)])
+      error_message = "Every primary-container dependency must name one of the configured sidecars."
+    }
+  }
 
   tags = {
     Name = var.name
