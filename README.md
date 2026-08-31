@@ -55,6 +55,7 @@ upgrade independently and deliberately; nothing here propagates on its own.
 | `memorydb` | MemoryDB Redis cluster with TLS and a named ACL user |
 | `service-secret` | Secrets Manager secret whose *shape* Terraform owns, not its values |
 | `sessions-payload-bucket` | Private versioned SSE-KMS payload storage with metadata-controlled retention |
+| `ssm-bastion` | Session Manager jump host for port-forwarding to private databases |
 | `valkey` | ElastiCache Valkey replication group |
 | `vpc` | Two-tier VPC for ECS Fargate workloads |
 | `workflow-bootstrap` | One-shot Fargate task that runs Workflow schema bootstrap |
