@@ -132,6 +132,40 @@ resource "aws_rds_cluster" "this" {
   depends_on = [aws_cloudwatch_log_group.postgresql]
 }
 
+# Stretches the interval of a rotation this module cannot turn off.
+#
+# RDS enables managed rotation on the master credential secret at seven days and
+# owns the schedule. There is no argument on aws_rds_cluster to disable it, and
+# disabling it directly is refused: the secret's OwningService is rds, so
+# CancelRotateSecret returns InvalidRequestException for a secret managed by
+# another service. That call is also this resource's destroy path, which is why
+# the resource is created only when a caller asks for it -- adding it and later
+# removing it would leave a destroy that cannot succeed.
+#
+# The interval is therefore the only lever, and 999 days is the Secrets Manager
+# maximum. A dev account sets that to opt out in practice; prod leaves the
+# variable null and keeps the seven-day default.
+#
+# rotate_immediately is false on purpose. It defaults to true, and true here
+# would rotate the password the moment this applies -- the exact failure this
+# change exists to make rare. ECS resolves a secrets block only when a task
+# starts, so a rotation leaves every running task holding a credential the
+# cluster no longer accepts until the service is redeployed.
+#
+# No rotation_lambda_arn: it is optional in the provider schema and must be
+# omitted for a managed secret, which RDS rotates without a function.
+resource "aws_secretsmanager_secret_rotation" "master_password" {
+  #checkov:skip=CKV_AWS_304:A caller that sets this variable is lengthening the interval, and the value it is likely to set -- 999, the AWS maximum -- is by definition more than 90 days. The check is right that this weakens rotation; that is the deliberate trade for a dev account whose tasks are stranded by every rotation. Prod leaves master_password_rotation_days null, creates none of this, and keeps RDS's seven days.
+  count = var.master_password_rotation_days == null ? 0 : 1
+
+  secret_id          = aws_rds_cluster.this.master_user_secret[0].secret_arn
+  rotate_immediately = false
+
+  rotation_rules {
+    automatically_after_days = var.master_password_rotation_days
+  }
+}
+
 data "aws_iam_policy_document" "monitoring_assume" {
   count = var.monitoring_interval > 0 ? 1 : 0
 

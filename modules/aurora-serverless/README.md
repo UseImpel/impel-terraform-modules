@@ -51,6 +51,38 @@ container_secrets = {
 
 The secret's JSON holds `username` and `password`.
 
+### Rotation
+
+RDS turns on **managed rotation** for that secret at **seven days** and owns the schedule.
+
+It cannot be turned off. The secret's `OwningService` is `rds`, and `CancelRotateSecret` is refused
+for a secret managed by another service, so there is no API — and therefore no Terraform argument —
+that disables it. `aws_rds_cluster` exposes no rotation attribute at all.
+
+The interval is the only lever. `master_password_rotation_days` sets it, and **999 days is the
+Secrets Manager maximum** — which is how a dev account opts out in practice:
+
+```hcl
+master_password_rotation_days = 999
+```
+
+Leave it `null` (the default) to keep RDS's seven days. Prod should.
+
+**Rotation strands running tasks.** ECS resolves a task definition's `secrets` block only when a
+task *starts*. When the password rotates, every already-running task keeps the old credential and
+keeps using it until something redeploys the service — so connections fail on the next reconnect,
+not at rotation time. Nothing in this module forces that redeploy. Either redeploy the affected
+services after a rotation, or drive it from the `Secret Label Updated` EventBridge event (which
+Secrets Manager publishes natively and, unlike `RotationSucceeded`, needs no CloudTrail).
+
+The setting is deliberately not applied retroactively: this module sets `rotate_immediately = false`,
+because the provider defaults it to `true` and that would rotate the password the moment the change
+applies — causing the very outage the longer interval is meant to avoid.
+
+Because `CancelRotateSecret` is also this resource's destroy path, the schedule resource is created
+only when the variable is non-null. Setting it and later returning it to `null` produces a destroy
+that fails; change the number instead.
+
 ## Notes
 
 Ingress is by **source security group only** — there is no CIDR variable. Two prod clusters

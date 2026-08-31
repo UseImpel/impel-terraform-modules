@@ -147,3 +147,17 @@ variable "apply_immediately" {
   type        = bool
   default     = false
 }
+
+variable "master_password_rotation_days" {
+  description = "Days between RDS-managed rotations of the master credential secret. Null keeps the RDS default of 7. Rotation cannot be switched off -- the secret is owned by RDS, so CancelRotateSecret is refused -- and 999 is the AWS maximum, which is how a dev account effectively opts out. Every consumer reads this password once at task start, so a rotation strands running tasks until they are redeployed."
+  type        = number
+  default     = null
+
+  # A ternary, not `== null || (...)`. Terraform's || does not short-circuit:
+  # it evaluates both operands, so the null default would fail the comparison
+  # with "argument must not be null" for every caller that omits this variable.
+  validation {
+    condition     = var.master_password_rotation_days == null ? true : (var.master_password_rotation_days >= 1 && var.master_password_rotation_days <= 999)
+    error_message = "master_password_rotation_days must be null, or between 1 and 999 (the Secrets Manager maximum rotation period)."
+  }
+}
