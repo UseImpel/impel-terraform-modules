@@ -47,3 +47,8 @@ output "kms_key_arn" {
   description = "CMK encrypting storage, the credentials secret and Performance Insights."
   value       = aws_kms_key.this.arn
 }
+
+output "master_password_rotation_days" {
+  description = "Days between RDS-managed rotations of the master credential secret. Null means the RDS default of 7 is in force, because this module set no schedule."
+  value       = var.master_password_rotation_days
+}
