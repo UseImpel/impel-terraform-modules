@@ -153,8 +153,11 @@ variable "master_password_rotation_days" {
   type        = number
   default     = null
 
+  # A ternary, not `== null || (...)`. Terraform's || does not short-circuit:
+  # it evaluates both operands, so the null default would fail the comparison
+  # with "argument must not be null" for every caller that omits this variable.
   validation {
-    condition     = var.master_password_rotation_days == null || (var.master_password_rotation_days >= 1 && var.master_password_rotation_days <= 999)
+    condition     = var.master_password_rotation_days == null ? true : (var.master_password_rotation_days >= 1 && var.master_password_rotation_days <= 999)
     error_message = "master_password_rotation_days must be null, or between 1 and 999 (the Secrets Manager maximum rotation period)."
   }
 }
