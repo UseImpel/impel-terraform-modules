@@ -8,9 +8,10 @@
 # means "merge to <branch> deploys" is enforced by AWS rather than by the
 # workflow file -- editing the YAML cannot widen it.
 #
-# The permissions name one ECR repository and one ECS service. A role that can
-# deploy the gateway cannot touch identity, so the blast radius of a compromised
-# repository stops at its own service.
+# The permissions name a caller-given list of ECR repositories and one ECS
+# service. A role that can deploy the gateway cannot touch identity, so the
+# blast radius of a compromised repository stops at its own service — even
+# when that service builds from several repositories, as meets does.
 #
 # The two actions that cannot be resource-scoped are ecr:GetAuthorizationToken
 # and ecs:RegisterTaskDefinition -- the API rejects a resource on either. Both
@@ -88,7 +89,7 @@ data "aws_iam_policy_document" "deploy" {
   }
 
   statement {
-    sid    = "PushToOwnRepository"
+    sid    = "PushToOwnRepositories"
     effect = "Allow"
 
     actions = [
@@ -102,7 +103,7 @@ data "aws_iam_policy_document" "deploy" {
       "ecr:DescribeImages",
     ]
 
-    resources = [var.ecr_repository_arn]
+    resources = var.ecr_repository_arns
   }
 
   # RegisterTaskDefinition takes no resource -- a task definition family does
