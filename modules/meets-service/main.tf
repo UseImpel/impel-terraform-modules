@@ -251,7 +251,7 @@ resource "aws_iam_role_policy" "execute_command" {
 
 resource "aws_security_group" "task" {
   name        = "${var.name}-task"
-  description = "Only the load balancer may reach ${var.name} tasks, on the primary container's port."
+  description = "Only the load balancer may reach ${var.name} tasks, on the primary containers port."
   vpc_id      = var.vpc_id
 
   tags = {
