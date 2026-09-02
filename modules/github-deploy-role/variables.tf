@@ -49,9 +49,14 @@ variable "deploy_branch" {
   }
 }
 
-variable "ecr_repository_arn" {
-  description = "The one repository this role may push to. Pass the ecr-repo module's repository_arn."
-  type        = string
+variable "ecr_repository_arns" {
+  description = "The repositories this role may push to. Pass the ecr-repo module's repository_arn, one per repository — a single-element list for the common one-service-one-repository case, more for a role deploying several repositories from one workflow."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.ecr_repository_arns) > 0
+    error_message = "ecr_repository_arns needs at least one repository ARN, or this role can never push an image."
+  }
 }
 
 variable "cluster_name" {

@@ -7,7 +7,7 @@ whether to honour it.
 ## Creates
 
 - `aws_iam_role` — trusting exactly one repository and branch
-- `aws_iam_role_policy` — scoped to one ECR repository and one ECS service
+- `aws_iam_role_policy` — scoped to the given ECR repositories and one ECS service
 
 ## Call
 
@@ -19,11 +19,18 @@ module "gateway_deploy" {
   github_repository = "UseImpel/impel-gateway"
   deploy_branch     = "dev"
 
-  ecr_repository_arn = module.service_ecr["gateway"].repository_arn
-  cluster_name       = module.ecs_cluster.cluster_name
-  service_name       = module.service["gateway"].service_name
-  pass_role_arns     = module.service["gateway"].role_arns
+  ecr_repository_arns = [module.service_ecr["gateway"].repository_arn]
+  cluster_name         = module.ecs_cluster.cluster_name
+  service_name         = module.service["gateway"].service_name
+  pass_role_arns       = module.service["gateway"].role_arns
 }
+```
+
+A workflow that builds several images from one repository — `impel-meets` pushes seven —
+passes every ECR repository ARN it deploys to:
+
+```hcl
+ecr_repository_arns = [for r in module.meets_ecr : r.repository_arn]
 ```
 
 The account's GitHub OIDC provider must already exist. `scripts/bootstrap-account.sh` creates it,
@@ -98,7 +105,7 @@ Every grant names one resource, except three that AWS will not let you scope:
 
 | Action | Why `*` |
 |---|---|
-| `ecr:GetAuthorizationToken` | The API rejects any resource. The token it returns is still bounded by the repository grants. |
+| `ecr:GetAuthorizationToken` | The API rejects any resource. The token it returns is still bounded by the repository grants, one entry per ARN in `ecr_repository_arns`. |
 | `ecs:RegisterTaskDefinition` | A family does not exist until its first revision, so there is nothing to name. Registering is harmless without `UpdateService` and `PassRole`, both of which are scoped. |
 | `ecs:DescribeTaskDefinition`, `ListTasks`, `logs:*` | Read-only, and revision ARNs carry no per-service prefix to match on. |
 
