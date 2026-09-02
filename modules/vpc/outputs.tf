@@ -28,6 +28,11 @@ output "vpc_endpoint_security_group_id" {
   value       = aws_security_group.endpoints.id
 }
 
+output "s3_gateway_prefix_list_id" {
+  description = "Prefix list ID of the S3 gateway endpoint, for security group rules that allow S3 without opening 0.0.0.0/0. Null when enable_s3_gateway_endpoint is false."
+  value       = one(aws_vpc_endpoint.s3[*].prefix_list_id)
+}
+
 output "nat_gateway_public_ips" {
   description = "Elastic IPs of the NAT gateways. These are the addresses outbound traffic appears from, for allowlisting with third parties."
   value       = aws_eip.nat[*].public_ip

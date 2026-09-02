@@ -67,6 +67,33 @@ keeps the graph acyclic.
 The data modules still expose `allowed_security_group_ids` for the simple case where nothing flows
 back the other way.
 
+## Service discovery and peer ingress
+
+Both default to off; a caller that sets neither gets exactly the resources it got before.
+
+A service with no load balancer is unreachable twice over: nothing resolves to it and its security
+group accepts nothing. `service_registry_arn` fixes the first — pass an entry from the
+[`private-dns-namespace`](../private-dns-namespace) module's `service_registry_arns` and ECS
+registers each task's address under the namespace. `ingress_security_group_rules` fixes the second,
+writing ingress onto **this service's own** task security group for each named peer:
+
+```hcl
+module "query_service" {
+  # ...
+  attach_load_balancer = false
+  service_registry_arn = module.code_intelligence_dns.service_registry_arns["query"]
+
+  ingress_security_group_rules = {
+    api = { security_group_id = module.api_service.task_security_group_id, port = 7700 }
+  }
+}
+```
+
+Note the direction relative to `data_store_ingress`: data-store rules land on the store's group
+(the service grants itself access), peer rules land on this service's group (the callee declares
+who may call it). Both keep the graph acyclic as long as calls flow one way; two services that call
+each other need one side to pass a literal security group ID instead.
+
 ## Two roles, not one
 
 The **execution role** is what the ECS agent uses before the container starts: pull the image, read

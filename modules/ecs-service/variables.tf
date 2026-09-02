@@ -252,6 +252,12 @@ variable "continuous_deployment" {
   default     = false
 }
 
+variable "service_registry_arn" {
+  description = "Cloud Map service ARN to register task addresses with, from the private-dns-namespace module's service_registry_arns. Null — the default — registers nothing. Gives a service a stable DNS name inside the VPC without a load balancer; DNS is not reachability, so the caller still needs an entry in ingress_security_group_rules."
+  type        = string
+  default     = null
+}
+
 variable "log_retention_days" {
   description = "Retention for the service log group. Prod SEA keeps 90 days."
   type        = number
@@ -442,5 +448,19 @@ variable "data_store_ingress" {
   validation {
     condition     = alltrue([for s in values(var.data_store_ingress) : s.port > 0 && s.port <= 65535])
     error_message = "Every data_store_ingress port must be between 1 and 65535."
+  }
+}
+
+variable "ingress_security_group_rules" {
+  description = "Peer services allowed to reach this one, keyed by a label used in the rule description. Creates an ingress rule on this service's own task security group referencing each peer's security group — the way an api service reaches a no-load-balancer service whose security group otherwise accepts nothing. Empty — the default — grants no peer ingress."
+  type = map(object({
+    security_group_id = string
+    port              = number
+  }))
+  default = {}
+
+  validation {
+    condition     = alltrue([for r in values(var.ingress_security_group_rules) : r.port > 0 && r.port <= 65535])
+    error_message = "Every ingress_security_group_rules port must be between 1 and 65535."
   }
 }

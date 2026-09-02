@@ -8,10 +8,12 @@
 # means "merge to <branch> deploys" is enforced by AWS rather than by the
 # workflow file -- editing the YAML cannot widen it.
 #
-# The permissions name a caller-given list of ECR repositories and one ECS
-# service. A role that can deploy the gateway cannot touch identity, so the
-# blast radius of a compromised repository stops at its own service — even
-# when that service builds from several repositories, as meets does.
+# The permissions name a caller-given list of ECR repositories and a
+# caller-given list of ECS services. A role that can deploy the gateway cannot
+# touch identity, so the blast radius of a compromised repository stops at its
+# own services — even when a service builds from several repositories, as
+# meets does, or one repository deploys several services, as code
+# intelligence does.
 #
 # The two actions that cannot be resource-scoped are ecr:GetAuthorizationToken
 # and ecs:RegisterTaskDefinition -- the API rejects a resource on either. Both
@@ -40,7 +42,10 @@ locals {
   )
   subject = "${local.subject_prefix}:ref:refs/heads/${var.deploy_branch}"
 
-  service_arn = "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:service/${var.cluster_name}/${var.service_name}"
+  service_arns = [
+    for service_name in var.service_names :
+    "arn:aws:ecs:${data.aws_region.current.region}:${data.aws_caller_identity.current.account_id}:service/${var.cluster_name}/${service_name}"
+  ]
 }
 
 data "aws_iam_policy_document" "trust" {
@@ -77,7 +82,7 @@ data "aws_iam_policy_document" "trust" {
 }
 
 data "aws_iam_policy_document" "deploy" {
-  #checkov:skip=CKV_AWS_356:Three statements use "*" because AWS rejects a resource on those actions: ecr:GetAuthorizationToken, ecs:RegisterTaskDefinition (a family has no ARN before its first revision), and the read-only Describe/List calls, whose revision ARNs carry no per-service prefix. Every action that can be scoped is -- one ECR repository, one ECS service, two pass-roles behind a PassedToService condition. See the Scope table in README.md.
+  #checkov:skip=CKV_AWS_356:Three statements use "*" because AWS rejects a resource on those actions: ecr:GetAuthorizationToken, ecs:RegisterTaskDefinition (a family has no ARN before its first revision), and the read-only Describe/List calls, whose revision ARNs carry no per-service prefix. Every action that can be scoped is -- the named ECR repositories, the named ECS services, two pass-roles behind a PassedToService condition. See the Scope table in README.md.
   # Exchanges credentials for a docker login. The API rejects any resource
   # other than "*", and the token it returns is still bounded by the
   # repository-scoped grants below.
@@ -127,7 +132,7 @@ data "aws_iam_policy_document" "deploy" {
       "ecs:DescribeServices",
     ]
 
-    resources = [local.service_arn]
+    resources = local.service_arns
   }
 
   # Reading a task definition to build the next revision from it. Revisions are
@@ -199,7 +204,7 @@ data "aws_iam_policy_document" "deploy" {
 
 resource "aws_iam_role" "this" {
   name        = var.name
-  description = "Deploys ${var.service_name} from ${var.github_repository} on ${var.deploy_branch}. Assumable by that branch alone."
+  description = "Deploys ${join(", ", var.service_names)} from ${var.github_repository} on ${var.deploy_branch}. Assumable by that branch alone."
 
   assume_role_policy = data.aws_iam_policy_document.trust.json
 

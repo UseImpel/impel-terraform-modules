@@ -60,13 +60,18 @@ variable "ecr_repository_arns" {
 }
 
 variable "cluster_name" {
-  description = "ECS cluster holding the service, used to build the service ARN the deploy grant is scoped to."
+  description = "ECS cluster holding the services, used to build the service ARNs the deploy grant is scoped to."
   type        = string
 }
 
-variable "service_name" {
-  description = "The one ECS service this role may update."
-  type        = string
+variable "service_names" {
+  description = "The ECS services this role may update — a single-element list for the common one-repository-one-service case, more for a repository whose workflow rolls several services in the same cluster, as code intelligence does with api and query. Every entry scopes the same UpdateService/DescribeServices grant; anything not listed stays out of reach."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.service_names) > 0
+    error_message = "service_names needs at least one service name, or this role can never deploy anything."
+  }
 }
 
 variable "build_secret_arns" {

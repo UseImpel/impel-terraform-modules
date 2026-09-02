@@ -191,6 +191,10 @@ resource "aws_vpc_endpoint" "s3" {
   vpc_endpoint_type = "Gateway"
   route_table_ids   = aws_route_table.private[*].id
 
+  # Null leaves AWS's full-access endpoint policy in place; the provider sends
+  # no policy at all, so unset callers see no change.
+  policy = var.s3_gateway_endpoint_policy
+
   tags = {
     Name = "${var.name}-s3"
   }

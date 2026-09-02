@@ -1,13 +1,17 @@
 # github-deploy-role
 
-The identity an application repository assumes to ship one service: push an image, roll it onto the
-running service. No access keys anywhere — GitHub mints a short-lived OIDC token and AWS decides
-whether to honour it.
+The identity an application repository assumes to ship its services: push an image, roll it onto
+the running service. No access keys anywhere — GitHub mints a short-lived OIDC token and AWS
+decides whether to honour it.
+
+> **Breaking change:** `service_name` (string) is now `service_names` (list of strings). Existing
+> callers must wrap their value in a list — `service_names = ["impel-gateway-dev"]` — which
+> renders the same policy. This rename warrants a major version bump.
 
 ## Creates
 
 - `aws_iam_role` — trusting exactly one repository and branch
-- `aws_iam_role_policy` — scoped to the given ECR repositories and one ECS service
+- `aws_iam_role_policy` — scoped to the given ECR repositories and ECS services
 
 ## Call
 
@@ -21,7 +25,7 @@ module "gateway_deploy" {
 
   ecr_repository_arns = [module.service_ecr["gateway"].repository_arn]
   cluster_name         = module.ecs_cluster.cluster_name
-  service_name         = module.service["gateway"].service_name
+  service_names        = [module.service["gateway"].service_name]
   pass_role_arns       = module.service["gateway"].role_arns
 }
 ```
@@ -31,6 +35,16 @@ passes every ECR repository ARN it deploys to:
 
 ```hcl
 ecr_repository_arns = [for r in module.meets_ecr : r.repository_arn]
+```
+
+A repository whose one workflow deploys several services in the same cluster names each of them;
+every entry scopes the same `UpdateService`/`DescribeServices` grant:
+
+```hcl
+service_names = [
+  module.service["api"].service_name,
+  module.service["query"].service_name,
+]
 ```
 
 The account's GitHub OIDC provider must already exist. `scripts/bootstrap-account.sh` creates it,
@@ -101,7 +115,8 @@ trust policy rather than by the workflow.
 
 ## Scope
 
-Every grant names one resource, except three that AWS will not let you scope:
+Every grant names exactly the resources the caller listed, except three that AWS will not let you
+scope:
 
 | Action | Why `*` |
 |---|---|
@@ -115,7 +130,7 @@ accepts one; without the grant at all, ECS cannot start a container and the depl
 `RunTask`.
 
 The result: a role that deploys the gateway cannot touch identity. A compromised application
-repository reaches its own service and stops.
+repository reaches its own services — the ones in `service_names` — and stops.
 
 ### Build secrets
 
