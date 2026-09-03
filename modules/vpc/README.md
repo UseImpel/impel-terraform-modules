@@ -2,7 +2,7 @@
 
 Two-tier VPC for ECS Fargate workloads, shaped after the live
 `ImpelGatewaySeaFoundation` VPC (`10.90.0.0/16`) documented in
-[`docs/prod-sea-mapping.md`](../../docs/prod-sea-mapping.md).
+[`docs/prod-sea-mapping.md`](https://github.com/UseImpel/impel-infra-prod/blob/main/docs/prod-sea-mapping.md).
 
 ## Creates
 

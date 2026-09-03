@@ -110,7 +110,7 @@ holds even against someone with write access to the application repository.
 
 `StringEquals`, deliberately, not `StringLike`. A wildcard subject would let any branch deploy,
 including one pushed by a fork's pull request. Same reasoning as the apply roles in
-[`../../docs/bootstrap.md`](../../docs/bootstrap.md), where the environment gate is enforced by the
+[`docs/bootstrap.md`](https://github.com/UseImpel/impel-infra-prod/blob/main/docs/bootstrap.md), where the environment gate is enforced by the
 trust policy rather than by the workflow.
 
 ## Scope

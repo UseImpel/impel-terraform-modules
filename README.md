@@ -46,18 +46,24 @@ upgrade independently and deliberately; nothing here propagates on its own.
 | `acm-certificate` | DNS-validated ACM certificate for a load balancer |
 | `alb` | Application Load Balancer — `:80` redirects to `:443` |
 | `app-bucket` | Private application bucket with its own CMK, TLS-only, versioned |
+| `artifacts-bucket` | Versioned SSE-KMS storage for immutable artifacts, plus the presigning role |
 | `aurora-serverless` | Aurora PostgreSQL Serverless v2 cluster |
 | `ecr-repo` | ECR repository with lifecycle policy and optional cross-account pull |
 | `ecs-cluster` | Fargate ECS cluster |
 | `ecs-service` | One Fargate service, end to end — the workhorse module |
+| `efs-volume` | Encrypted EFS filesystem with one access point per named mount point |
+| `engine-tasks` | One-off Fargate task definitions started via `RunTask`, not a service |
 | `github-deploy-role` | Identity an application repo assumes to ship one service |
 | `inbound-events` | S3 + CMK + FIFO queue and DLQ for a service's inbound event plane |
+| `meets-service` | Fargate service of interdependent containers on shared EFS. Single writer, no autoscaling |
 | `memorydb` | MemoryDB Redis cluster with TLS and a named ACL user |
+| `private-dns-namespace` | Private Cloud Map namespace and discovery services — in-VPC names, no load balancer |
 | `service-secret` | Secrets Manager secret whose *shape* Terraform owns, not its values |
 | `sessions-payload-bucket` | Private versioned SSE-KMS payload storage with metadata-controlled retention |
 | `ssm-bastion` | Session Manager jump host for port-forwarding to private databases |
 | `valkey` | ElastiCache Valkey replication group |
 | `vpc` | Two-tier VPC for ECS Fargate workloads |
+| `work-queue` | Standard SQS work queue, DLQ and CMK. No overflow bucket, no FIFO ordering |
 | `workflow-bootstrap` | One-shot Fargate task that runs Workflow schema bootstrap |
 
 Each module has its own README with inputs, outputs, and the live resource it

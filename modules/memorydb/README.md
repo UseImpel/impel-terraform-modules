@@ -1,7 +1,7 @@
 # memorydb
 
 MemoryDB Redis cluster with TLS and a named ACL user, shaped after prod Next
-`impel-next-sea` in [`docs/prod-sea-mapping.md`](../../docs/prod-sea-mapping.md).
+`impel-next-sea` in [`docs/prod-sea-mapping.md`](https://github.com/UseImpel/impel-infra-prod/blob/main/docs/prod-sea-mapping.md).
 
 This is **not** interchangeable with [`valkey`](../valkey/). Next's client is
 `ioredis.Cluster` with username `impel-next`. Valkey in this estate is

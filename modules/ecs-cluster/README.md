@@ -1,7 +1,7 @@
 # ecs-cluster
 
 Fargate ECS cluster, shaped after the live `impel-gateway-sea` cluster documented in
-[`docs/prod-sea-mapping.md`](../../docs/prod-sea-mapping.md).
+[`docs/prod-sea-mapping.md`](https://github.com/UseImpel/impel-infra-prod/blob/main/docs/prod-sea-mapping.md).
 
 ## Creates
 
