@@ -299,6 +299,22 @@ resource "aws_vpc_security_group_ingress_rule" "from_lb" {
   ip_protocol                  = "tcp"
 }
 
+# Peer services granted access to this one — the way an api service reaches a
+# no-load-balancer service whose security group otherwise accepts nothing.
+# Written onto this service's own group, referencing the caller's, so the
+# callee declares who may reach it.
+resource "aws_vpc_security_group_ingress_rule" "from_peer" {
+  for_each = var.ingress_security_group_rules
+
+  security_group_id = aws_security_group.task.id
+  description       = "${each.key} to ${var.name} tasks."
+
+  referenced_security_group_id = each.value.security_group_id
+  from_port                    = each.value.port
+  to_port                      = each.value.port
+  ip_protocol                  = "tcp"
+}
+
 # Tasks reach ECR, Secrets Manager, data stores and third-party APIs outbound.
 # Ingress is where the control lives.
 # trivy:ignore:AWS-0104 Tasks call third-party APIs whose address ranges are not enumerable. Narrowing this to the VPC would break every outbound integration; prod leaves egress open on all four services.
@@ -526,6 +542,17 @@ resource "aws_ecs_service" "this" {
     }
   }
 
+  # Cloud Map registration, for a service reached by DNS name rather than
+  # through the load balancer. A records on awsvpc tasks carry the ENI
+  # address, so the registry ARN is the whole configuration.
+  dynamic "service_registries" {
+    for_each = var.service_registry_arn != null ? [1] : []
+
+    content {
+      registry_arn = var.service_registry_arn
+    }
+  }
+
   tags = {
     Name = var.name
   }
@@ -591,6 +618,17 @@ resource "aws_ecs_service" "continuous" {
       target_group_arn = aws_lb_target_group.this[0].arn
       container_name   = var.container_name
       container_port   = var.container_port
+    }
+  }
+
+  # Cloud Map registration, for a service reached by DNS name rather than
+  # through the load balancer. A records on awsvpc tasks carry the ENI
+  # address, so the registry ARN is the whole configuration.
+  dynamic "service_registries" {
+    for_each = var.service_registry_arn != null ? [1] : []
+
+    content {
+      registry_arn = var.service_registry_arn
     }
   }
 

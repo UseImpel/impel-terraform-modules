@@ -41,3 +41,9 @@ switch changes only the route target.
 The default security group is adopted with no ingress or egress rules. Terraform will show it as
 managed; that is intentional and mirrors the `VpcRestrictDefaultSG` custom resource CDK uses in
 prod.
+
+The S3 gateway endpoint accepts an optional `s3_gateway_endpoint_policy` — an IAM policy document
+bounding what anything in the VPC can do through the endpoint, regardless of its own permissions.
+Null, the default, leaves AWS's full-access policy in place. The endpoint's prefix list is exposed
+as `s3_gateway_prefix_list_id` for security group rules that allow S3 without opening `0.0.0.0/0`;
+it is null when `enable_s3_gateway_endpoint` is false.

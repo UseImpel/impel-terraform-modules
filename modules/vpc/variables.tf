@@ -66,6 +66,12 @@ variable "enable_s3_gateway_endpoint" {
   default     = true
 }
 
+variable "s3_gateway_endpoint_policy" {
+  description = "IAM policy document attached to the S3 gateway endpoint, bounding what any principal in the VPC can do through it regardless of its own permissions. Null — the default — leaves the endpoint at AWS's full-access policy, the current behaviour. Ignored when enable_s3_gateway_endpoint is false."
+  type        = string
+  default     = null
+}
+
 variable "enable_flow_logs" {
   description = "Send VPC flow logs to CloudWatch Logs. Off in dev, where the log volume is not worth the spend."
   type        = bool
