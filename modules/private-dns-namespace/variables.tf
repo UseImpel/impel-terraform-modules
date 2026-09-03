@@ -3,8 +3,8 @@ variable "name" {
   type        = string
 
   validation {
-    condition     = can(regex("^[a-z0-9][a-z0-9.-]{0,251}[a-z0-9]$", var.name))
-    error_message = "name must be a DNS name: lowercase alphanumeric labels with hyphens, separated by dots."
+    condition     = can(regex("^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\\.([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?))*$", var.name))
+    error_message = "name must be lowercase DNS labels of 1-63 alphanumeric/hyphen characters, separated by dots; every label must begin and end alphanumeric."
   }
 }
 
