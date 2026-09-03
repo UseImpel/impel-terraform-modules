@@ -85,8 +85,9 @@ resource "aws_iam_role" "execution" {
 }
 
 data "aws_iam_policy_document" "execution" {
-  #checkov:skip=CKV_AWS_356:ecr:GetAuthorizationToken and the ECR layer reads are not resource-scopable in the ECR API. Log writes below are scoped to exactly this module's log group.
-  # GetAuthorizationToken has no resource scope in the ECR API.
+  #checkov:skip=CKV_AWS_356:ecr:GetAuthorizationToken is not resource-scopable in the ECR API. ECR layer reads and log writes are scoped below.
+  # GetAuthorizationToken has no resource scope in the ECR API. Layer and
+  # manifest reads below stay limited to the caller-supplied engine repositories.
   statement {
     sid       = "EcrAuth"
     effect    = "Allow"
@@ -102,7 +103,7 @@ data "aws_iam_policy_document" "execution" {
       "ecr:GetDownloadUrlForLayer",
       "ecr:BatchGetImage",
     ]
-    resources = ["*"]
+    resources = var.ecr_repository_arns
   }
 
   statement {

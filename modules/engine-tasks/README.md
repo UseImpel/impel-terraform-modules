@@ -12,6 +12,12 @@ Terraform port of the engine fleet in code-intelligence
 engine/checkout security groups, and the RunTask grants on the query and
 worker task roles.
 
+## Pull authority
+
+Pass the engine-image repository ARNs in `ecr_repository_arns`. The execution role keeps the
+unscopable `ecr:GetAuthorizationToken`, but image manifest and layer reads are restricted to those
+repositories; it cannot use that token to pull unrelated application images.
+
 ## Creates
 
 - `aws_ecs_task_definition` per `tasks` entry — Fargate, `awsvpc`, X86_64,

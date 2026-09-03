@@ -44,6 +44,16 @@ variable "tasks" {
   }
 }
 
+variable "ecr_repository_arns" {
+  description = "ECR repository ARNs the shared engine execution role may pull. The role still needs ecr:GetAuthorizationToken on *, but layer and manifest reads remain limited to these repositories."
+  type        = list(string)
+
+  validation {
+    condition     = length(var.ecr_repository_arns) > 0
+    error_message = "ecr_repository_arns must contain at least one repository ARN."
+  }
+}
+
 variable "engine_container_name" {
   description = "Container name inside every engine task definition. The worker/query services address the container by this name in their RunTask overrides (CODE_INTELLIGENCE_AWS_ENGINE_CONTAINER_NAME)."
   type        = string
