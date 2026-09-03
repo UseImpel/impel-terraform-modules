@@ -1,37 +1,18 @@
-# A jump host for reaching private databases from a developer's laptop, with
-# no inbound path and no key material.
+# A jump host for reaching private databases from a laptop, with no inbound
+# path and no key material: no key pair, no public address, empty ingress.
+# The SSM agent dials out over 443, so authorisation is IAM (ssm:StartSession)
+# and the audit trail is session history rather than authorized_keys.
 #
-# The instance has no key pair, no public address and an empty ingress list.
-# Access is Session Manager only: the SSM agent dials the control plane
-# outbound over 443 and a session is a stream on that connection, so nothing
-# ever needs to reach the instance. Authorisation is IAM
-# (`ssm:StartSession`), and the audit trail is the SSM session history rather
-# than an `authorized_keys` file nobody prunes.
-#
-# What developers actually run against this is
-# AWS-StartPortForwardingSessionToRemoteHost: the instance forwards TCP to a
-# database endpoint it can reach and the laptop sees it on localhost. That is
-# why the egress rules below are per-database rather than open -- forwarding is
-# the whole capability, so the set of reachable hosts *is* the security policy.
-#
-# Sized for that job and nothing else. It runs one agent and proxies TCP, so
-# the smallest current-generation instance is not a compromise; anything larger
-# is paying for idle.
+# Developers run AWS-StartPortForwardingSessionToRemoteHost against it. The
+# egress rules below are per-database rather than open because forwarding is
+# the whole capability -- the set of reachable hosts *is* the security policy.
 
 data "aws_partition" "current" {}
 
-# ---------------------------------------------------------------------------
-# Identity
-#
-# AmazonSSMManagedInstanceCore is what registers the instance as a managed node
-# and lets the agent open sessions. It is a managed policy on purpose: the
-# actions are AWS-owned and change with the agent, so a hand-written copy is a
-# maintenance burden that drifts.
-#
-# Note the direction of trust. This role lets the *instance* talk to SSM. It
-# grants nobody the right to start a session -- that is a permission on the
-# human's principal, and the policy for it is aws_iam_policy.operator below.
-# ---------------------------------------------------------------------------
+# Identity. AmazonSSMManagedInstanceCore registers the instance as a managed
+# node; managed rather than hand-copied because the actions change with the
+# agent. Note the direction: this lets the *instance* talk to SSM and grants
+# nobody a session -- that is aws_iam_policy.operator below.
 
 data "aws_iam_policy_document" "assume" {
   statement {
@@ -61,7 +42,6 @@ resource "aws_iam_instance_profile" "this" {
   role = aws_iam_role.this.name
 }
 
-# ---------------------------------------------------------------------------
 # Network position
 #
 # Egress only, and only to the two things the host does: HTTPS so the agent can
@@ -73,7 +53,6 @@ resource "aws_iam_instance_profile" "this" {
 # where it does not, the same traffic leaves through NAT to a public AWS
 # endpoint whose addresses are not enumerable. Both are 443 outbound, and
 # var.https_egress_cidr is how a caller with endpoints tightens it to the VPC.
-# ---------------------------------------------------------------------------
 
 resource "aws_security_group" "this" {
   name        = var.name
@@ -134,7 +113,6 @@ resource "aws_vpc_security_group_ingress_rule" "database" {
   ip_protocol                  = "tcp"
 }
 
-# ---------------------------------------------------------------------------
 # The instance
 #
 # Amazon Linux 2023 ships and starts the SSM agent, so there is no user data:
@@ -142,7 +120,6 @@ resource "aws_vpc_security_group_ingress_rule" "database" {
 # Parameter Store rather than pinned, because a pinned AMI is a host that
 # silently ages out of patches, and this one holds no state worth preserving --
 # it forwards TCP and can be replaced at any time.
-# ---------------------------------------------------------------------------
 
 data "aws_ssm_parameter" "ami" {
   name = var.ami_ssm_parameter
@@ -200,32 +177,18 @@ resource "aws_instance" "this" {
   }
 }
 
-# ---------------------------------------------------------------------------
-# Operator access
+# Operator access -- the permission a human needs to open a tunnel. Exported
+# rather than attached: the consuming principals are SSO permission sets that
+# live outside this account, so attaching is the caller's step.
 #
-# The permission a human needs to open a tunnel. Created here because the
-# document is what makes this host usable at all -- without it nobody can
-# connect, and a policy written by hand at the console is one nobody reviews.
-# It is exported rather than attached: the principals that consume it are SSO
-# permission sets or roles that live outside the account this module is applied
-# to, so attaching is the caller's step. Same split as modules/app-bucket,
-# which owns its access policy and hands back an ARN.
+# StartSession takes the instance *and* the document, and an allow needs both.
+# Naming only the instance would permit any document on it, including
+# SSM-SessionManagerRunShell -- a root shell. This grants port forwarding
+# alone; ssm:SendCommand is absent for the same reason.
 #
-# The shape follows the end-user sample in the Session Manager documentation,
-# narrowed to one instance and one document.
-#
-# StartSession takes the instance *and* the document as resources, and an
-# allow needs both. Naming only the instance would permit any document on it,
-# including SSM-SessionManagerRunShell -- an interactive shell as root. This
-# grants port forwarding alone, which is the whole job: the tunnel carries TCP
-# to a database and offers no way to run a command on the host. ssm:SendCommand
-# is absent for the same reason, and its absence is the point.
-#
-# Own-session scoping is by resource ARN, not by condition: a session is named
-# `<caller>-<suffix>`, so session/$${aws:userid}-* is the ARN pattern that
-# matches the caller's own and nobody else's. Without it any holder of this
-# policy could terminate a colleague's session mid-query.
-# ---------------------------------------------------------------------------
+# Own-session scoping is by resource ARN: sessions are named
+# `<caller>-<suffix>`, so session/$${aws:userid}-* matches the caller's own and
+# nobody else's. Without it any holder could kill a colleague's session.
 
 data "aws_iam_policy_document" "operator" {
   #checkov:skip=CKV_AWS_356:The DescribeSessions statement below. Neither ssm:DescribeSessions nor ssm:GetConnectionStatus supports resource-level permissions -- both are account-scoped in the service authorization reference -- so a narrower Resource denies every call. Both are read-only, and the actions that carry data are scoped to this instance and to the caller's own sessions.

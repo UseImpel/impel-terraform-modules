@@ -6,13 +6,11 @@ data "aws_caller_identity" "current" {}
 data "aws_elb_service_account" "current" {}
 
 locals {
-  # Whether to serve HTTPS drives count and for_each on the listener and its
-  # ingress rules, so it has to be known at plan time. Inferring it from
-  # certificate_arn works only while that ARN is known at plan time too --
-  # create the certificate in the same apply and the ARN is unknown, the
-  # inference is unknown with it, and Terraform cannot decide how many rules to
-  # create. enable_https lets the caller state the answer statically. Same
-  # reasoning as attach_load_balancer in ../ecs-service.
+  # Drives count/for_each on the listener and its ingress rules, so it must be
+  # known at plan time. Inferring from certificate_arn breaks when the
+  # certificate is created in the same apply and its ARN is still unknown --
+  # enable_https lets the caller state it statically. Same reasoning as
+  # attach_load_balancer in ../ecs-service.
   has_https           = var.enable_https != null ? var.enable_https : var.certificate_arn != null
   access_logs_enabled = var.enable_access_logs
   bucket_name         = "${var.name}-alb-${data.aws_caller_identity.current.account_id}"
@@ -96,9 +94,7 @@ resource "aws_lb" "this" {
   depends_on = [aws_s3_bucket_policy.access_logs]
 }
 
-# ---------------------------------------------------------------------------
 # Listeners
-# ---------------------------------------------------------------------------
 
 # Redirects when a certificate is present; otherwise serves the default
 # response directly, leaving a certificate-less ALB usable for internal HTTP.
@@ -178,9 +174,7 @@ resource "aws_lb_listener_certificate" "additional" {
   certificate_arn = each.value
 }
 
-# ---------------------------------------------------------------------------
 # Access logs
-# ---------------------------------------------------------------------------
 
 resource "aws_s3_bucket" "access_logs" {
   count = local.access_logs_enabled ? 1 : 0

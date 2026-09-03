@@ -1,6 +1,4 @@
-# ---------------------------------------------------------------------------
 # Identity and placement
-# ---------------------------------------------------------------------------
 
 variable "name" {
   description = "Service name, also the task definition family and the base of every child resource, e.g. impel-gateway-dev."
@@ -32,9 +30,7 @@ variable "subnet_ids" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Container
-# ---------------------------------------------------------------------------
 
 variable "container_name" {
   description = "Name of the container inside the task, e.g. gateway. Referenced by the load balancer attachment."
@@ -202,9 +198,7 @@ variable "ephemeral_storage_gib" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Service
-# ---------------------------------------------------------------------------
 
 variable "desired_count" {
   description = "Task count at creation. Autoscaling takes over afterwards, so changes here are ignored on later applies."
@@ -275,9 +269,7 @@ variable "log_group_name" {
   default     = null
 }
 
-# ---------------------------------------------------------------------------
 # Load balancer
-# ---------------------------------------------------------------------------
 
 variable "attach_load_balancer" {
   description = "Put this service behind a load balancer, creating a target group, a listener rule and ALB ingress on the task security group. Must be a literal the caller sets, not derived from another resource: it drives count and has to resolve at plan time, whereas listener_arn is unknown until the load balancer exists."
@@ -349,9 +341,7 @@ variable "listener_rule_path_patterns" {
   default     = []
 }
 
-# ---------------------------------------------------------------------------
 # Autoscaling
-# ---------------------------------------------------------------------------
 
 variable "autoscaling_min_capacity" {
   description = "Autoscaling floor. Prod SEA floors every service at 2."
@@ -411,9 +401,7 @@ variable "load_balancer_arn_suffix" {
   default     = null
 }
 
-# ---------------------------------------------------------------------------
 # IAM
-# ---------------------------------------------------------------------------
 
 variable "task_role_policy_json" {
   description = "Inline policy for the task role — the permissions application code itself uses. Null attaches no inline policy."
@@ -433,9 +421,7 @@ variable "secret_kms_key_arns" {
   default     = []
 }
 
-# ---------------------------------------------------------------------------
 # Data store access
-# ---------------------------------------------------------------------------
 
 variable "data_store_ingress" {
   description = "Data stores this service may reach, keyed by a label used in the rule description. Creates an ingress rule on each store's own security group referencing this service's task security group. This is the direction that keeps the dependency graph acyclic: the store is built first with no clients, and the service grants itself access."

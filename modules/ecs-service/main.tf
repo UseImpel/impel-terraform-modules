@@ -133,14 +133,12 @@ resource "aws_cloudwatch_log_group" "this" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # IAM
 #
 # The execution role is used by the ECS agent to pull the image and read
 # secrets before the container starts. The task role is what application code
 # assumes at runtime. Merging them would give the application read access to
 # every secret the task definition names.
-# ---------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "assume" {
   statement {
@@ -273,9 +271,7 @@ resource "aws_iam_role_policy" "execute_command" {
   policy = data.aws_iam_policy_document.execute_command[0].json
 }
 
-# ---------------------------------------------------------------------------
 # Networking
-# ---------------------------------------------------------------------------
 
 resource "aws_security_group" "task" {
   name        = "${var.name}-task"
@@ -342,9 +338,7 @@ resource "aws_vpc_security_group_ingress_rule" "to_data_store" {
   ip_protocol                  = "tcp"
 }
 
-# ---------------------------------------------------------------------------
 # Task definition
-# ---------------------------------------------------------------------------
 
 resource "aws_ecs_task_definition" "this" {
   family                   = var.name
@@ -388,9 +382,7 @@ resource "aws_ecs_task_definition" "this" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Load balancer attachment
-# ---------------------------------------------------------------------------
 
 resource "aws_lb_target_group" "this" {
   #checkov:skip=CKV_AWS_378:TLS terminates at the load balancer; the hop to the task is HTTP inside a private subnet, reaching a security group that accepts the load balancer alone. This matches prod.
@@ -481,9 +473,7 @@ resource "aws_lb_listener_rule" "this" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Service
-# ---------------------------------------------------------------------------
 
 # Two variants of the same service, selected by var.continuous_deployment.
 # `ignore_changes` takes a static list — it cannot be built from a variable — so
@@ -655,9 +645,7 @@ locals {
   # One of the two counts is always zero, so exactly one element exists.
   service = one(concat(aws_ecs_service.this, aws_ecs_service.continuous))
 }
-# ---------------------------------------------------------------------------
 # Autoscaling
-# ---------------------------------------------------------------------------
 
 resource "aws_appautoscaling_target" "this" {
   service_namespace  = "ecs"

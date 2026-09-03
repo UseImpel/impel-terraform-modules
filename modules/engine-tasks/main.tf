@@ -35,9 +35,7 @@ locals {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Logs — one shared group; each engine keeps its own stream prefix
-# ---------------------------------------------------------------------------
 
 resource "aws_cloudwatch_log_group" "engine" {
   #checkov:skip=CKV_AWS_158:Engine logs are read by on-call through the console; a CMK adds key policy management on every reader for no threat model this estate has.
@@ -50,7 +48,6 @@ resource "aws_cloudwatch_log_group" "engine" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # IAM roles
 #
 # One execution role and one task role shared by the whole fleet, exactly as
@@ -58,7 +55,6 @@ resource "aws_cloudwatch_log_group" "engine" {
 # sealed engine tasks are credential-free by design — all artifact I/O uses
 # short-lived prefix-scoped presigned URLs minted by the services, so there
 # is nothing to attach. Do not add S3 or KMS here.
-# ---------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "assume" {
   statement {
@@ -123,9 +119,7 @@ resource "aws_iam_role_policy" "execution" {
   policy = data.aws_iam_policy_document.execution.json
 }
 
-# ---------------------------------------------------------------------------
 # Task definitions — one per engine, launched only via RunTask
-# ---------------------------------------------------------------------------
 
 resource "aws_ecs_task_definition" "this" {
   for_each = var.tasks
@@ -185,17 +179,13 @@ resource "aws_ecs_task_definition" "this" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Security groups
 #
-# Two network postures (runtime-stack.ts:125-155). Checkout tasks clone from
-# repository hosts on the internet and terminate before indexing begins.
-# Sealed engine tasks never see the internet: DNS to the VPC resolver, TLS to
-# the shared interface endpoints, TLS to the S3 gateway endpoint — nothing
-# else. Neither group has ingress; nothing connects INTO a one-off task.
-# The AWS provider revokes the SG default allow-all egress on creation, so
-# each group's egress is exactly the rules declared below.
-# ---------------------------------------------------------------------------
+# Two network postures (runtime-stack.ts:125-155). Checkout tasks reach
+# repository hosts on the internet; sealed engine tasks reach only the VPC
+# resolver, the interface endpoints and the S3 gateway endpoint. Neither has
+# ingress. The provider revokes the SG default allow-all egress, so each
+# group's egress is exactly what is declared below.
 
 resource "aws_security_group" "checkout" {
   #checkov:skip=CKV2_AWS_5:Checkout tasks attach this group dynamically through ECS RunTask awsvpcConfiguration; the task ENI does not exist in this reusable module.
@@ -273,14 +263,12 @@ resource "aws_vpc_security_group_egress_rule" "engine_s3" {
   ip_protocol    = "tcp"
 }
 
-# ---------------------------------------------------------------------------
 # RunTask policies for the service task roles
 #
 # The CDK adds these statements straight onto the query and worker task roles
 # (runtime-stack.ts:330-373). Here those roles are created by ecs-service
 # module instances, so the grants are standalone policies the caller attaches
 # via that module's task_role_policy_arns.
-# ---------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "runtask" {
   for_each = local.runtask_grants

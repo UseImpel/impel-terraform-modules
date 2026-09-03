@@ -1,6 +1,4 @@
-# ---------------------------------------------------------------------------
 # Identity and placement
-# ---------------------------------------------------------------------------
 
 variable "name" {
   description = "Service name, also the task definition family and the base of every child resource, e.g. impel-meets-dev."
@@ -32,14 +30,12 @@ variable "subnet_ids" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Containers
 #
 # Unlike ecs-service's single primary container plus optional sidecars, every
 # container here is a first-class, independently-sized member of the task:
 # the meets data plane is ten interdependent containers, each essential, each
 # with its own cpu/memory reservation. The map key is the container name.
-# ---------------------------------------------------------------------------
 
 variable "cpu" {
   description = "Task CPU units, the sum the platform reserves for the whole task. Fargate accepts 256, 512, 1024, 2048, 4096, 8192 and 16384."
@@ -146,7 +142,6 @@ variable "ephemeral_storage_gib" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Service
 #
 # Deployment posture is not a variable here. KTD2 fixes 100/0 (stop-then-
@@ -156,7 +151,6 @@ variable "ephemeral_storage_gib" {
 # 100/200 rolling default is unsafe for this shape, which is the reason this
 # module exists instead of a flag on that one. desired_count is fixed at 1
 # for the same reason and is not exposed as a variable.
-# ---------------------------------------------------------------------------
 
 variable "capacity_provider" {
   description = "Capacity provider for the service. FARGATE_SPOT is cheaper but interruptible."
@@ -210,9 +204,7 @@ variable "log_group_name" {
   default     = null
 }
 
-# ---------------------------------------------------------------------------
 # Load balancer
-# ---------------------------------------------------------------------------
 
 variable "attach_load_balancer" {
   description = "Put this service behind a load balancer, creating a target group, a listener rule and ALB ingress on the task security group. Must be a literal the caller sets, not derived from another resource: it drives count and has to resolve at plan time."
@@ -284,9 +276,7 @@ variable "listener_rule_path_patterns" {
   default     = []
 }
 
-# ---------------------------------------------------------------------------
 # IAM
-# ---------------------------------------------------------------------------
 
 variable "task_role_policy_json" {
   description = "Inline policy for the task role — the permissions application code itself uses. Null attaches no inline policy."

@@ -134,12 +134,10 @@ resource "aws_rds_cluster" "this" {
 
 # Stretches the interval of a rotation this module cannot turn off.
 #
-# RDS enables managed rotation on the master credential secret at seven days and
-# owns the schedule. There is no argument on aws_rds_cluster to disable it, and
-# disabling it directly is refused: the secret's OwningService is rds, so
-# CancelRotateSecret returns InvalidRequestException for a secret managed by
-# another service. That call is also this resource's destroy path, which is why
-# the resource is created only when a caller asks for it -- adding it and later
+# RDS owns the master credential rotation schedule (seven days). No argument on
+# aws_rds_cluster disables it, and CancelRotateSecret is refused because the
+# secret's OwningService is rds. That call is also this resource's destroy
+# path, which is why it is created only when a caller asks -- adding then
 # removing it would leave a destroy that cannot succeed.
 #
 # The interval is therefore the only lever, and 999 days is the Secrets Manager
