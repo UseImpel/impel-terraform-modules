@@ -8,7 +8,7 @@ front: ECS registers each task's ENI address as it starts and removes it as it s
 
 - `aws_service_discovery_private_dns_namespace` — visible only to resolvers inside the VPC
 - `aws_service_discovery_service` per entry in `services` — A records, TTL 10, `MULTIVALUE`
-  routing, custom health checks with `failure_threshold = 1`
+  routing, ECS-managed custom health checks with `failure_threshold = 1`
 
 ## Call
 

@@ -31,14 +31,10 @@ resource "aws_service_discovery_service" "this" {
     }
   }
 
-  # Custom health checks, because ECS itself reports task health to Cloud Map.
-  # A threshold of 1 removes a stopped task's record on the first report
-  # rather than serving a dead address for extra 30-second intervals. AWS now
-  # fixes the threshold at 1 and the provider deprecates the argument — kept
-  # explicit, matching what actually happens, until a provider major drops it.
-  health_check_custom_config {
-    failure_threshold = 1
-  }
+  # ECS reports task health to Cloud Map. AWS fixes custom-health failure
+  # threshold at one, so omit the deprecated argument rather than pretending
+  # callers can tune it.
+  health_check_custom_config {}
 
   tags = {
     Name = each.value
