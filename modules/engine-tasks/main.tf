@@ -197,8 +197,8 @@ resource "aws_ecs_task_definition" "this" {
 # each group's egress is exactly the rules declared below.
 # ---------------------------------------------------------------------------
 
-#checkov:skip=CKV2_AWS_5:Checkout tasks attach this group dynamically through ECS RunTask awsvpcConfiguration; the task ENI does not exist in this reusable module.
 resource "aws_security_group" "checkout" {
+  #checkov:skip=CKV2_AWS_5:Checkout tasks attach this group dynamically through ECS RunTask awsvpcConfiguration; the task ENI does not exist in this reusable module.
   name        = "${var.name_prefix}-checkout"
   description = "Checkout-only tasks may reach repository hosts and terminate before indexing begins."
   vpc_id      = var.vpc_id
@@ -218,8 +218,8 @@ resource "aws_vpc_security_group_egress_rule" "checkout_all" {
   ip_protocol = "-1"
 }
 
-#checkov:skip=CKV2_AWS_5:Engine tasks attach this group dynamically through ECS RunTask awsvpcConfiguration; the task ENI does not exist in this reusable module.
 resource "aws_security_group" "engine" {
+  #checkov:skip=CKV2_AWS_5:Engine tasks attach this group dynamically through ECS RunTask awsvpcConfiguration; the task ENI does not exist in this reusable module.
   name        = "${var.name_prefix}-engine"
   description = "Index and query engine tasks have no inbound or public internet access."
   vpc_id      = var.vpc_id
