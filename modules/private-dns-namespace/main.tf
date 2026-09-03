@@ -31,10 +31,11 @@ resource "aws_service_discovery_service" "this" {
     }
   }
 
-  # ECS reports task health to Cloud Map. AWS fixes custom-health failure
-  # threshold at one, so omit the deprecated argument rather than pretending
-  # callers can tune it.
-  health_check_custom_config {}
+  # No health_check_custom_config. An empty block carries only the deprecated
+  # failure_threshold, so the API drops it and returns a service without the
+  # attribute -- while the config still declares one. That mismatch is
+  # replace-forcing and immutable, so every plan proposed replacing the service
+  # forever. ECS registers and deregisters task addresses either way.
 
   tags = {
     Name = each.value
