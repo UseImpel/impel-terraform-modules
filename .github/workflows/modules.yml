@@ -45,6 +45,51 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
+  # 0. triage — skip quality when the merged PR already passed it.
+  #
+  # Unlike the account repositories, this one has no required status checks, so
+  # a pull request here can merge with `quality` red. The skip is therefore
+  # conditional on finding a successful run, not on the event being a push.
+  # ---------------------------------------------------------------------------
+  triage:
+    name: triage
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+      pull-requests: read
+    outputs:
+      quality: ${{ steps.decide.outputs.quality }}
+    steps:
+      - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        id: decide
+        with:
+          script: |
+            if (context.eventName !== 'push') {
+              core.setOutput('quality', 'run');
+              return;
+            }
+
+            const { owner, repo } = context.repo;
+            const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+              owner, repo, commit_sha: context.sha });
+            const merged = prs.data.find(p => p.merged_at);
+            if (!merged) {
+              core.setOutput('quality', 'run');
+              return;
+            }
+
+            const runs = await github.paginate(github.rest.checks.listForRef, {
+              owner, repo, ref: merged.head.sha, check_name: 'quality' });
+            const passed = runs.some(r => r.conclusion === 'success');
+
+            core.summary.addRaw(passed
+              ? `Quality skipped: #${merged.number} passed \`quality\` on ${merged.head.sha.slice(0, 7)}.`
+              : `Quality running: #${merged.number} has no successful \`quality\` run.`);
+            await core.summary.write();
+            core.setOutput('quality', passed ? 'skip' : 'run');
+
+  # ---------------------------------------------------------------------------
   # 1. quality — formatting, validation, linting, security scanning.
   #
   # Every later job needs this one, so the release path runs exactly the checks
@@ -54,6 +99,8 @@ jobs:
   # ---------------------------------------------------------------------------
   quality:
     name: quality
+    needs: triage
+    if: needs.triage.outputs.quality != 'skip'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -144,7 +191,12 @@ jobs:
   plan-release:
     name: plan-release
     needs: quality
-    if: github.event_name != 'pull_request'
+    # A skipped `quality` would skip this job too without a status function.
+    # `!= 'failure'` accepts success and skipped; it does not accept a red one.
+    if: >-
+      !cancelled()
+      && needs.quality.result != 'failure'
+      && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.plan.outputs.release }}
@@ -300,7 +352,7 @@ jobs:
   publish:
     name: publish
     needs: plan-release
-    if: needs.plan-release.outputs.release == 'true'
+    if: needs.plan-release.result == 'success' && needs.plan-release.outputs.release == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
@@ -384,8 +436,10 @@ jobs:
   # ---------------------------------------------------------------------------
   notify:
     name: notify
-    needs: [plan-release, publish]
-    if: always() && github.event_name != 'pull_request' && needs.plan-release.outputs.release == 'true'
+    needs: [quality, plan-release, publish]
+    if: >-
+      always() && github.event_name != 'pull_request'
+      && (needs.plan-release.outputs.release == 'true' || needs.quality.result == 'failure')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -393,13 +447,15 @@ jobs:
     steps:
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
           PUBLISH_RESULT: ${{ needs.publish.result }}
           VERSION: ${{ needs.plan-release.outputs.version }}
           BUMP: ${{ needs.plan-release.outputs.bump }}
         with:
           script: |
             const { owner, repo } = context.repo;
-            const { VERSION: version, BUMP: bump, PUBLISH_RESULT: result } = process.env;
+            const { VERSION: version, BUMP: bump, PUBLISH_RESULT: result,
+                    QUALITY_RESULT: quality } = process.env;
             const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
 
             const prs = await github.rest.repos.listPullRequestsAssociatedWithCommit({
@@ -407,7 +463,9 @@ jobs:
             if (!prs.data.length) return;
 
             let body;
-            if (result === 'success') {
+            if (quality === 'failure') {
+              body = `### ❌ Quality checks failed on \`main\` — nothing was released. [View run](${runUrl})`;
+            } else if (result === 'success') {
               const releaseUrl = `${context.serverUrl}/${owner}/${repo}/releases/tag/${version}`;
               body = [
                 `### 🏷️ Released as [\`${version}\`](${releaseUrl})`,
