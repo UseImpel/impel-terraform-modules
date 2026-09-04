@@ -2,13 +2,11 @@
 # share EFS-backed volumes: log group, IAM roles, task security group, task
 # definition, target group and listener rule, the service.
 #
-# Deliberately not ecs-service with a flag: that module's defaults — rolling
-# 100/200 deploys, AZ rebalancing enabled, autoscaling always on — assume
-# stateless replicas. This task holds the sole writer to its own postgres and
-# minio volumes, so a second task started before the first stops would fight
-# it for those mounts. Every deploy here stops the running task before
-# starting its replacement, there is exactly one task, and there is no
-# autoscaling to contend with it.
+# Deliberately not ecs-service with a flag: that module's defaults (rolling
+# 100/200 deploys, AZ rebalancing, autoscaling) assume stateless replicas.
+# This task is the sole writer to its postgres and minio volumes, so a second
+# task starting before the first stops would fight it for those mounts. Here
+# every deploy stops before starting, and there is no autoscaling.
 
 data "aws_region" "current" {}
 
@@ -106,14 +104,12 @@ resource "aws_cloudwatch_log_group" "this" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # IAM
 #
 # The execution role is used by the ECS agent to pull images and read secrets
 # before the containers start. The task role is what application code assumes
 # at runtime. Merging them would give every container read access to every
 # secret the task definition names.
-# ---------------------------------------------------------------------------
 
 data "aws_iam_policy_document" "assume" {
   statement {
@@ -245,9 +241,7 @@ resource "aws_iam_role_policy" "execute_command" {
   policy = data.aws_iam_policy_document.execute_command[0].json
 }
 
-# ---------------------------------------------------------------------------
 # Networking
-# ---------------------------------------------------------------------------
 
 resource "aws_security_group" "task" {
   name        = "${var.name}-task"
@@ -282,9 +276,7 @@ resource "aws_vpc_security_group_egress_rule" "all" {
   ip_protocol = "-1"
 }
 
-# ---------------------------------------------------------------------------
 # Task definition
-# ---------------------------------------------------------------------------
 
 resource "aws_ecs_task_definition" "this" {
   family                   = var.name
@@ -361,9 +353,7 @@ resource "aws_ecs_task_definition" "this" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Load balancer attachment
-# ---------------------------------------------------------------------------
 
 resource "aws_lb_target_group" "this" {
   #checkov:skip=CKV_AWS_378:TLS terminates at the load balancer; the hop to the task is HTTP inside a private subnet, reaching a security group that accepts the load balancer alone.
@@ -454,7 +444,6 @@ resource "aws_lb_listener_rule" "this" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Service
 #
 # Two variants of the same service, selected by var.continuous_deployment —
@@ -466,7 +455,6 @@ resource "aws_lb_listener_rule" "this" {
 # exactly one runner, with no autoscaling target to contend with a manual
 # change, so there is nothing to ignore_changes here the way ecs-service must
 # for its autoscaled desired_count.
-# ---------------------------------------------------------------------------
 
 resource "aws_ecs_service" "this" {
   count           = var.continuous_deployment ? 0 : 1

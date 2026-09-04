@@ -134,11 +134,9 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.private[count.index].id
 }
 
-# ---------------------------------------------------------------------------
 # VPC endpoints
 #
 # Keeps image pulls and secret reads off the NAT gateway.
-# ---------------------------------------------------------------------------
 
 resource "aws_security_group" "endpoints" {
   name        = "${var.name}-vpc-endpoints"
@@ -200,9 +198,7 @@ resource "aws_vpc_endpoint" "s3" {
   }
 }
 
-# ---------------------------------------------------------------------------
 # Flow logs
-# ---------------------------------------------------------------------------
 
 resource "aws_cloudwatch_log_group" "flow_logs" {
   count = var.enable_flow_logs ? 1 : 0

@@ -8,16 +8,13 @@
 # means "merge to <branch> deploys" is enforced by AWS rather than by the
 # workflow file -- editing the YAML cannot widen it.
 #
-# The permissions name a caller-given list of ECR repositories and a
-# caller-given list of ECS services. A role that can deploy the gateway cannot
-# touch identity, so the blast radius of a compromised repository stops at its
-# own services — even when a service builds from several repositories, as
-# meets does, or one repository deploys several services, as code
-# intelligence does.
+# Permissions name a caller-given list of ECR repositories and ECS services,
+# so a compromised repository stops at its own services -- whether a service
+# builds from several repositories (meets) or one repository deploys several
+# (code intelligence).
 #
-# The two actions that cannot be resource-scoped are ecr:GetAuthorizationToken
-# and ecs:RegisterTaskDefinition -- the API rejects a resource on either. Both
-# are annotated below.
+# ecr:GetAuthorizationToken and ecs:RegisterTaskDefinition cannot be
+# resource-scoped; the API rejects a resource on either. Both annotated below.
 
 data "aws_caller_identity" "current" {}
 data "aws_region" "current" {}
@@ -25,12 +22,10 @@ data "aws_region" "current" {}
 locals {
   oidc_host = "token.actions.githubusercontent.com"
 
-  # GitHub encodes the ref that minted the token into the subject. This is the
-  # whole security boundary, so it is built here rather than taken as a string.
-  # Repositories created after 2026-07-15 use an immutable owner/repository-ID
-  # prefix. Keep the name-based form as the backwards-compatible default for
-  # existing callers, while deriving the immutable prefix from the IDs GitHub
-  # assigns to the owner and repository.
+  # GitHub encodes the minting ref into the subject. This is the whole security
+  # boundary, so it is built here rather than taken as a string. Repositories
+  # created after 2026-07-15 use an immutable owner/repository-ID prefix; the
+  # name-based form stays the default for existing callers.
   repository_owner = split("/", var.github_repository)[0]
   repository_name  = split("/", var.github_repository)[1]
   subject_prefix = var.github_oidc_ids == null ? "repo:${var.github_repository}" : format(
