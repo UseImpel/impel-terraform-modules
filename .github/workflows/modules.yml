@@ -352,7 +352,20 @@ jobs:
   publish:
     name: publish
     needs: plan-release
-    if: needs.plan-release.result == 'success' && needs.plan-release.outputs.release == 'true'
+    # `!cancelled()` rather than a bare success check: `plan-release` reports
+    # `skipped` whenever `quality` was skipped, which is the normal path on a
+    # merge -- `triage` skips `quality` when the PR already passed it. A
+    # `== 'success'` test reads that as "do not publish", so no merge has ever
+    # released and every tag has needed a manual dispatch. Same reasoning as
+    # `needs.quality.result != 'failure'` in the job above, and as `apply` in
+    # UseImpel/impel-infra-prod.
+    #
+    # A red `quality` still blocks: `plan-release` requires it not to have
+    # failed, so it does not run, and `release` is never set.
+    if: >-
+      !cancelled()
+      && needs.plan-release.result != 'failure'
+      && needs.plan-release.outputs.release == 'true'
     runs-on: ubuntu-latest
     environment: release
     permissions:
