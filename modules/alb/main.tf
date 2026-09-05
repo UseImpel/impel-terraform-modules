@@ -218,6 +218,7 @@ resource "aws_s3_bucket_versioning" "access_logs" {
   }
 }
 
+# trivy:ignore:AWS-0132 ELB log delivery supports SSE-S3 only, so a CMK is not available here. Setting one fails silently in the worst way: the load balancer stays healthy, reports nothing, and no logs are ever written. Every ALB access-log bucket in the production estate is AES256 for this reason. The bucket is still encrypted, with bucket keys enabled.
 resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
   count = local.access_logs_enabled ? 1 : 0
 
