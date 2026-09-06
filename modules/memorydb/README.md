@@ -1,11 +1,10 @@
 # memorydb
 
-MemoryDB Redis cluster with TLS and a named ACL user, shaped after prod Next
-`impel-next-sea` in [`docs/prod-sea-mapping.md`](https://github.com/UseImpel/impel-infra-prod/blob/main/docs/prod-sea-mapping.md).
+MemoryDB Redis cluster with TLS and a named ACL user.
 
-This is **not** interchangeable with [`valkey`](../valkey/). Next's client is
-`ioredis.Cluster` with username `impel-next`. Valkey in this estate is
-cluster-mode off and a default AUTH token.
+This is **not** interchangeable with [`valkey`](../valkey/). Next uses
+`ioredis.Cluster` with username `impel-next`; Valkey is cluster-mode off and
+uses a default AUTH token.
 
 ## Creates
 

@@ -1,7 +1,6 @@
 # ecs-service
 
-One Fargate service, end to end. The workhorse module — every default is taken from the live prod
-SEA services documented in [`docs/prod-sea-mapping.md`](https://github.com/UseImpel/impel-infra-prod/blob/main/docs/prod-sea-mapping.md).
+One Fargate service, end to end. The caller controls sizing, routing, and deployment behavior.
 
 ## Creates
 

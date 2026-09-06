@@ -1,8 +1,6 @@
 # aurora-serverless
 
-Aurora PostgreSQL Serverless v2 cluster, shaped after the four clusters in prod SEA documented in
-[`docs/prod-sea-mapping.md`](https://github.com/UseImpel/impel-infra-prod/blob/main/docs/prod-sea-mapping.md): one `db.serverless` writer, a
-per-cluster CMK, `postgresql` log export, Performance Insights, credentials in Secrets Manager.
+Aurora PostgreSQL Serverless v2 cluster with one writer and optional readers.
 
 ## Creates
 

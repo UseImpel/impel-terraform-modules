@@ -1,8 +1,6 @@
 # inbound-events
 
-SQS FIFO queue, dead-letter queue, overflow bucket, and one CMK — the Next
-inbound-events plane. Shaped after prod Next `impel-next-sea-inbound-events.fifo`
-in [`docs/prod-sea-mapping.md`](https://github.com/UseImpel/impel-infra-prod/blob/main/docs/prod-sea-mapping.md).
+SQS FIFO queue, dead-letter queue, overflow bucket, and one CMK for an inbound-events plane.
 
 This is **not** interchangeable with [`app-bucket`](../app-bucket/). Overflow
 objects share a CMK with the queue; the application encrypts S3 objects with
