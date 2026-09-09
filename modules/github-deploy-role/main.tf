@@ -3,10 +3,9 @@
 #
 # Two properties make this safe to hand to a repository this one does not own.
 #
-# The trust policy names exactly one OIDC subject, so only the branch below can
-# assume the role. GitHub mints a token with that subject and no other, which
-# means "merge to <branch> deploys" is enforced by AWS rather than by the
-# workflow file -- editing the YAML cannot widen it.
+# The trust policy names exactly one OIDC subject, so only the branch or GitHub
+# Environment below can assume the role. GitHub mints a token with that subject
+# and no other, which means editing workflow YAML cannot widen the trust.
 #
 # Permissions name a caller-given list of ECR repositories and ECS services,
 # so a compromised repository stops at its own services -- whether a service
@@ -22,10 +21,11 @@ data "aws_region" "current" {}
 locals {
   oidc_host = "token.actions.githubusercontent.com"
 
-  # GitHub encodes the minting ref into the subject. This is the whole security
-  # boundary, so it is built here rather than taken as a string. Repositories
-  # created after 2026-07-15 use an immutable owner/repository-ID prefix; the
-  # name-based form stays the default for existing callers.
+  # GitHub encodes either the minting ref or the job's protected Environment
+  # into the subject. This is the whole security boundary, so the suffix is
+  # derived from typed inputs rather than accepted as a free-form subject.
+  # Repositories created after 2026-07-15 use an immutable owner/repository-ID
+  # prefix; the name-based form stays the default for existing callers.
   repository_owner = split("/", var.github_repository)[0]
   repository_name  = split("/", var.github_repository)[1]
   subject_prefix = var.github_oidc_ids == null ? "repo:${var.github_repository}" : format(
@@ -35,7 +35,17 @@ locals {
     local.repository_name,
     var.github_oidc_ids.repository_id,
   )
-  subject = "${local.subject_prefix}:ref:refs/heads/${var.deploy_branch}"
+  subject = var.github_environment == null ? (
+    "${local.subject_prefix}:ref:refs/heads/${var.deploy_branch}"
+    ) : (
+    "${local.subject_prefix}:environment:${replace(var.github_environment, ":", "%3A")}"
+  )
+
+  deployment_target_description = var.github_environment == null ? (
+    "branch ${var.deploy_branch}"
+    ) : (
+    "GitHub Environment ${var.github_environment}"
+  )
 
   service_arns = [
     for service_name in var.service_names :
@@ -199,7 +209,7 @@ data "aws_iam_policy_document" "deploy" {
 
 resource "aws_iam_role" "this" {
   name        = var.name
-  description = "Deploys ${join(", ", var.service_names)} from ${var.github_repository} on ${var.deploy_branch}. Assumable by that branch alone."
+  description = "Deploys ${join(", ", var.service_names)} from ${var.github_repository} via ${local.deployment_target_description} only."
 
   assume_role_policy = data.aws_iam_policy_document.trust.json
 

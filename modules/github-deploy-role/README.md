@@ -10,7 +10,7 @@ decides whether to honour it.
 
 ## Creates
 
-- `aws_iam_role` — trusting exactly one repository and branch
+- `aws_iam_role` — trusting exactly one repository and either one branch or one GitHub Environment
 - `aws_iam_role_policy` — scoped to the given ECR repositories and ECS services
 
 ## Call
@@ -67,6 +67,30 @@ The IDs must both be positive. The module derives the prefix from the owner/name
 `github_repository`, appends `:ref:refs/heads/<deploy_branch>`, and still uses an exact
 (`StringEquals`) trust condition.
 
+For a production job protected by a GitHub Environment, set its exact name:
+
+```hcl
+github_repository  = "UseImpel/impel-sessions"
+github_oidc_ids     = {
+  owner_id      = 283797627
+  repository_id = 1304531882
+}
+github_environment = "Production"
+```
+
+The trusted subject becomes:
+
+```text
+repo:UseImpel@283797627/impel-sessions@1304531882:environment:Production
+```
+
+Setting `github_environment` replaces the branch subject because GitHub emits an
+environment subject, not a ref subject, for a job that references an Environment.
+Keep the workflow's source-ref guard and configure the Environment's deployment
+branch policy as well: the OIDC environment subject does not itself encode the
+source branch. A colon in an Environment name is encoded as `%3A`, matching
+GitHub's OIDC subject format.
+
 ## Using it from the application repository
 
 ```yaml
@@ -87,10 +111,11 @@ steps:
         --service impel-gateway-dev --force-new-deployment
 ```
 
-The workflow must be triggered by `deploy_branch`. A run on any other ref receives a token with a
-different subject and STS refuses it.
+Without `github_environment`, the workflow must be triggered by `deploy_branch`; a
+run on any other ref receives a different subject and STS refuses it. With an
+Environment target, the workflow job must reference that exact Environment.
 
-## Why the branch is a property of the cloud
+## Why the deployment target is a property of the cloud
 
 The trust policy accepts one subject. For a legacy repository it is:
 
@@ -107,6 +132,11 @@ repo:UseImpel@283797627/impel-sessions@1304531882:ref:refs/heads/dev
 GitHub puts the ref that triggered the run into the token and signs it. A workflow cannot claim a
 subject it was not run under, so **editing the YAML cannot widen this** — the branch restriction
 holds even against someone with write access to the application repository.
+
+For an Environment-gated job GitHub puts the Environment name in the subject
+instead. Required reviewers then gate the job before it can request AWS
+credentials; branch restrictions must be enforced by both the workflow and the
+Environment's deployment policy.
 
 `StringEquals`, deliberately, not `StringLike`. A wildcard subject would let any branch deploy,
 including one pushed by a fork's pull request. Same reasoning as the apply roles in
