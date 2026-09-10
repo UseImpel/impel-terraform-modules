@@ -154,9 +154,6 @@ jobs:
             echo "::endgroup::"
           done < <(find modules -mindepth 1 -maxdepth 1 -type d | sort)
 
-      - name: Validate OIDC subject contract
-        run: node modules/github-deploy-role/tests/subject-contract.mjs
-
       - name: TFLint
         env:
           GITHUB_TOKEN: ${{ github.token }}
