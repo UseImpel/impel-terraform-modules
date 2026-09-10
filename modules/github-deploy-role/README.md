@@ -75,13 +75,13 @@ github_oidc_ids     = {
   owner_id      = 283797627
   repository_id = 1304531882
 }
-github_environment = "Production"
+github_environment = "production"
 ```
 
 The trusted subject becomes:
 
 ```text
-repo:UseImpel@283797627/impel-sessions@1304531882:environment:Production
+repo:UseImpel@283797627/impel-sessions@1304531882:environment:production
 ```
 
 Setting `github_environment` replaces the branch subject because GitHub emits an
