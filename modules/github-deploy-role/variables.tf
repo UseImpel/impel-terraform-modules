@@ -39,13 +39,25 @@ variable "github_oidc_ids" {
 }
 
 variable "deploy_branch" {
-  description = "The one branch whose workflow runs may assume this role. Matched exactly, so a pull request from a fork cannot deploy: only a run on this branch gets a token with the matching subject."
+  description = "The one branch whose workflow runs may assume this role when github_environment is null. Matched exactly, so a pull request from a fork cannot deploy."
   type        = string
   default     = "dev"
 
   validation {
     condition     = !can(regex("[*?]", var.deploy_branch))
     error_message = "deploy_branch must name one branch. A wildcard would let any matching ref deploy, which is the boundary this role exists to draw."
+  }
+}
+
+variable "github_environment" {
+  description = "Optional GitHub Environment whose jobs may assume this role. When set, the exact environment subject replaces the branch subject; use the Environment's deployment-branch policy to restrict which refs can reach its approval gate."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.github_environment == null ? true : (trimspace(var.github_environment) == var.github_environment && length(var.github_environment) > 0 && length(var.github_environment) <= 255)
+    error_message = "github_environment must be null or a non-empty GitHub Environment name of at most 255 characters with no leading or trailing whitespace."
   }
 }
 
