@@ -14,7 +14,8 @@ second task starting before the first stops would fight it for those mounts. Thi
   container shares)
 - Task security group, accepting the primary container's port **from the load balancer only**
 - Task definition (Fargate, `awsvpc`, X86_64/Linux) with one container per entry in `containers`,
-  and a `volume` block per entry in `volumes`
+  and a `volume` block per entry in `volumes`; each container's `memory` renders as ECS
+  `memoryReservation`, not a container-level hard `memory` limit
 - Target group (`target_type = "ip"`) and a listener rule, when `attach_load_balancer` is true
 - ECS service with circuit breaker + rollback, `100/0` deployment percentages, AZ rebalancing
   disabled, `desired_count = 1`
@@ -125,8 +126,10 @@ healthy again — hence `health_check_grace_period` defaulting to 900 seconds ra
 
 `cpu` and `memory` are the task-level totals and are required with no default — unlike
 `ecs-service`, where a single container makes 512/1024 a reasonable guess, a ten-container task
-needs a deliberate number. Every container's own `cpu`/`memory` are soft reservations; the task
-definition has a `precondition` rejecting a plan where they sum past the task total.
+needs a deliberate number. Every container's own `cpu`/`memory` are soft reservations. The module
+renders that per-container memory as ECS `memoryReservation` and emits no container-level hard
+`memory` limit; the task-level limit is the only hard cap. The task definition has a
+`precondition` rejecting a plan where the reservations sum past that task total.
 
 ## Who deploys new images
 
