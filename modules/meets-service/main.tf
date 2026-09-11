@@ -28,11 +28,11 @@ locals {
   container_definitions = [
     for name, c in var.containers : merge(
       {
-        name      = name
-        image     = c.image
-        cpu       = c.cpu
-        memory    = c.memory
-        essential = true
+        name              = name
+        image             = c.image
+        cpu               = c.cpu
+        memoryReservation = c.memory
+        essential         = true
 
         environment = [
           for k, v in c.environment_variables : { name = k, value = v }

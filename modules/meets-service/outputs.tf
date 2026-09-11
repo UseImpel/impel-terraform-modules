@@ -57,3 +57,8 @@ output "container_names" {
   description = "Names of every container in the task definition, for building CloudWatch Logs Insights queries or aws ecs execute-command --container arguments."
   value       = keys(var.containers)
 }
+
+output "container_definitions" {
+  description = "Rendered ECS container definitions. Per-container memory is a memoryReservation; the task-level memory setting is the sole hard limit."
+  value       = local.container_definitions
+}

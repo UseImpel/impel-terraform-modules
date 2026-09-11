@@ -58,7 +58,7 @@ variable "memory" {
 }
 
 variable "containers" {
-  description = "Every container in the task, keyed by container name. Each is essential: true — this module has no optional-container concept, because the meets shape has none. Per-container cpu/memory are soft reservations that must not exceed the task-level cpu/memory once summed."
+  description = "Every container in the task, keyed by container name. Each is essential: true — this module has no optional-container concept, because the meets shape has none. Per-container cpu and memory are soft reservations; memory renders as ECS memoryReservation, with no container-level hard memory limit, and neither may exceed the task-level totals once summed."
   type = map(object({
     image                     = string
     cpu                       = number
