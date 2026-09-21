@@ -101,3 +101,18 @@ provisioned cluster with `serverlessv2_scaling_configuration` and `db.serverless
 
 Defaults lean production-safe: `deletion_protection = true`, `skip_final_snapshot = false`. Dev must
 set both the other way or `terraform destroy` will not complete.
+
+## Auto-pause
+
+`min_capacity = 0` turns on Serverless v2 auto-pause. After `seconds_until_auto_pause` (default 300,
+maximum 86400) with no client connections the writer scales to 0 ACUs and its instance charge stops;
+storage and backups are still billed. The next connection resumes it in roughly 15 seconds (30 or
+more after a day paused), so client connect timeouts must exceed that and the first request after a
+pause is slow. A reader in promotion tier 0 or 1 pauses and resumes with the writer.
+
+What keeps an instance awake: any open client connection, including idle pool connections, health
+checks that reach the database, and pollers. An RDS Proxy, logical replication, or Global Database
+membership disables pausing outright. `ServerlessDatabaseCapacity` reads 0 while paused; if it never
+does, `DatabaseConnections` will show what is holding it up.
+
+Only for environments that can absorb the resume latency. The prod roots keep a 0.5 floor.

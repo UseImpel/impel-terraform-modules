@@ -58,13 +58,24 @@ variable "master_username" {
 }
 
 variable "min_capacity" {
-  description = "Serverless v2 floor in ACUs. Prod SEA floors every cluster at 0.5."
+  description = "Serverless v2 floor in ACUs. Prod SEA floors every cluster at 0.5. Zero turns on auto-pause: the writer (and any tier 0-1 reader) scales to 0 ACUs and stops being billed after seconds_until_auto_pause with no client connections, then resumes on the next connection in roughly 15 seconds. Needs Aurora PostgreSQL 16.3+ (17.9 qualifies) and clients whose connect timeout exceeds the resume time."
   type        = number
   default     = 0.5
 
   validation {
     condition     = var.min_capacity >= 0 && var.min_capacity <= 256
     error_message = "min_capacity must be between 0 and 256 ACUs."
+  }
+}
+
+variable "seconds_until_auto_pause" {
+  description = "Idle time before an auto-pause-enabled instance scales to 0 ACUs. Only meaningful, and only sent to RDS, when min_capacity is 0: the API rejects the field on a non-zero floor. 300 (the RDS default) to 86400."
+  type        = number
+  default     = 300
+
+  validation {
+    condition     = var.seconds_until_auto_pause >= 300 && var.seconds_until_auto_pause <= 86400
+    error_message = "seconds_until_auto_pause must be between 300 and 86400 seconds."
   }
 }
 
