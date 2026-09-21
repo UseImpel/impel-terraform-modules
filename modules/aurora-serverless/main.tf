@@ -120,9 +120,14 @@ resource "aws_rds_cluster" "this" {
   enabled_cloudwatch_logs_exports     = ["postgresql"]
   iam_database_authentication_enabled = true
 
+  # seconds_until_auto_pause is sent only with a zero floor. RDS refuses it
+  # otherwise ("SecondsUntilAutoPause can only be specified when minimum
+  # capacity is 0"), and null keeps the provider from sending a stale value
+  # when a cluster moves back from 0 to a non-zero floor.
   serverlessv2_scaling_configuration {
-    min_capacity = var.min_capacity
-    max_capacity = var.max_capacity
+    min_capacity             = var.min_capacity
+    max_capacity             = var.max_capacity
+    seconds_until_auto_pause = var.min_capacity == 0 ? var.seconds_until_auto_pause : null
   }
 
   tags = {
