@@ -136,6 +136,13 @@ The `postgresql` log group is created by Terraform before the instance so it car
 `major.minor` string, so RDS taking a minor upgrade on its own would show as permanent drift on the
 next plan. Bump `engine_version` to take a minor.
 
+`ca_cert_identifier` is pinned to `rds-ca-rsa2048-g1` rather than left to the account default, which
+is a mutable account-level setting. A client that validates the server certificate — `pg` with
+`rejectUnauthorized: true`, `psql` with `sslmode=verify-full` — fails to connect when the instance
+presents a chain its trust store does not carry, and that failure reads as a network problem rather
+than a certificate one. The default here is what every Aurora instance in this estate presents, so an
+instance replacing one needs no trust-store change.
+
 `subnet_ids` still needs two AZs even single-AZ: RDS requires the subnet group to span two.
 
 Defaults lean production-safe: `deletion_protection = true`, `skip_final_snapshot = false`. Dev must

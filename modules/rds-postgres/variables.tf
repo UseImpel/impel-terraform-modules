@@ -100,6 +100,19 @@ variable "multi_az" {
   default     = false
 }
 
+# Pinned rather than left to the account default, which is a mutable
+# account-level setting and is what a client's trust store has to match. A
+# client that validates the server certificate -- rejectUnauthorized, verify-full
+# -- fails to connect when the instance presents a chain it does not carry, and
+# that failure looks like a network problem rather than a certificate one.
+# rds-ca-rsa2048-g1 is what every Aurora instance in this estate presents, so an
+# instance replacing one of those keeps the same chain.
+variable "ca_cert_identifier" {
+  description = "RDS CA the instance presents. Defaults to rds-ca-rsa2048-g1, matching the Aurora clusters this module replaces, so a TLS-validating client needs no trust-store change. Valid until 2061."
+  type        = string
+  default     = "rds-ca-rsa2048-g1"
+}
+
 variable "backup_retention_days" {
   description = "Automated backup retention. Backup storage up to the allocated storage size is free, so dev keeps 1 day at no cost."
   type        = number
