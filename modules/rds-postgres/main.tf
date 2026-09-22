@@ -97,6 +97,7 @@ resource "aws_db_instance" "this" {
   #checkov:skip=CKV_AWS_293:Deletion protection is var.deletion_protection, true by default. Dev sets it false so the environment can be destroyed.
   #checkov:skip=CKV_AWS_118:Enhanced monitoring is var.monitoring_interval, off by default for the same reason as in aurora-serverless: per-second OS metrics on a db.t4g.micro dev instance cost more than they reveal. Prod sets the interval and gets the role.
   #checkov:skip=CKV_AWS_226:auto_minor_version_upgrade is false deliberately -- see the argument below. engine_version pins major.minor, so RDS taking a minor on its own is permanent drift on every subsequent plan rather than a silent improvement. Minors are taken by bumping the variable, which is a reviewed change.
+  #checkov:skip=CKV_AWS_211:The check is older than the CA it is rejecting. CI pins bridgecrew/checkov:2.0.930, which predates rds-ca-rsa2048-g1 and recognises only rds-ca-2019 as modern -- and rds-ca-2019 expired in August 2024. describe-certificates reports the pinned CA valid until 2061, and it is what every Aurora instance in the estate already presents. Satisfying this check literally would mean pinning an expired CA.
   #checkov:skip=CKV2_AWS_30:Query logging needs log_statement, which logs every statement including its arguments. Enable per instance via var.instance_parameters where the data warrants it.
   #checkov:skip=CKV2_AWS_60:Automated backups are configured through backup_retention_period. An AWS Backup plan is an estate-wide decision, not a per-instance one.
   identifier = var.name
