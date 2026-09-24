@@ -21,6 +21,9 @@ resource "aws_s3_bucket_versioning" "frontend" {
   versioning_configuration { status = "Enabled" }
 }
 
+# trivy:ignore:AWS-0132 The bucket contains only hashed, publicly served SPA
+# assets. SSE-S3 provides encryption at rest without introducing a KMS key
+# policy and decrypt grant into the CloudFront OAC delivery path.
 resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
   bucket = aws_s3_bucket.frontend.id
   rule {
