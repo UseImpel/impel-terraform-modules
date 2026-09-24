@@ -1,5 +1,4 @@
 data "aws_caller_identity" "current" {}
-data "aws_region" "current" {}
 
 locals {
   repository_owner = split("/", var.github_repository)[0]
