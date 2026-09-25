@@ -1,4 +1,10 @@
 resource "aws_s3_bucket" "frontend" {
+  #checkov:skip=CKV_AWS_18:CloudFront is the only reader, through OAC. A second access-log bucket would add a retention boundary for objects CloudTrail data events already record.
+  #checkov:skip=CKV_AWS_19:False positive on the checkov 2.0.930 image CI pins. Encryption is aws_s3_bucket_server_side_encryption_configuration with AES256; that version does not follow the companion resource.
+  #checkov:skip=CKV_AWS_21:False positive on the checkov 2.0.930 image CI pins. Versioning is aws_s3_bucket_versioning Enabled below.
+  #checkov:skip=CKV_AWS_144:The objects are content-addressed build artifacts and are republished from CI; cross-region replication is not part of this edge.
+  #checkov:skip=CKV_AWS_145:SSE-S3 is deliberate. A CMK would add a key policy and a decrypt grant on the CloudFront OAC path for assets that are already public through the distribution.
+
   bucket        = var.bucket_name
   force_destroy = false
 }
@@ -21,9 +27,7 @@ resource "aws_s3_bucket_versioning" "frontend" {
   versioning_configuration { status = "Enabled" }
 }
 
-# trivy:ignore:AWS-0132 The bucket contains only hashed, publicly served SPA
-# assets. SSE-S3 provides encryption at rest without introducing a KMS key
-# policy and decrypt grant into the CloudFront OAC delivery path.
+# trivy:ignore:AWS-0132 The bucket contains only hashed, publicly served SPA assets. SSE-S3 provides encryption at rest without introducing a KMS key policy and decrypt grant into the CloudFront OAC delivery path.
 resource "aws_s3_bucket_server_side_encryption_configuration" "frontend" {
   bucket = aws_s3_bucket.frontend.id
   rule {
@@ -80,6 +84,9 @@ resource "aws_s3_bucket_policy" "frontend" {
 }
 
 resource "aws_cloudfront_distribution" "this" {
+  #checkov:skip=CKV_AWS_86:Standard access logging needs its own bucket and is not part of this module. Origin object reads are covered by CloudTrail data events.
+  #checkov:skip=CKV2_AWS_32:The default behavior attaches Managed-SecurityHeadersPolicy. This check only passes an inline aws_cloudfront_response_headers_policy whose CSP is default-src 'none', which would block the SPA.
+
   enabled             = true
   comment             = "${var.name} Vite SPA and API edge"
   aliases             = var.aliases
