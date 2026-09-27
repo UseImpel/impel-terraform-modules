@@ -148,10 +148,20 @@ resource "aws_cloudfront_distribution" "this" {
     geo_restriction { restriction_type = "none" }
   }
 
-  viewer_certificate {
-    acm_certificate_arn      = var.certificate_arn
-    ssl_support_method       = "sni-only"
-    minimum_protocol_version = "TLSv1.2_2021"
+  dynamic "viewer_certificate" {
+    for_each = var.certificate_arn == null ? [true] : []
+    content {
+      cloudfront_default_certificate = viewer_certificate.value
+    }
+  }
+
+  dynamic "viewer_certificate" {
+    for_each = var.certificate_arn == null ? [] : [var.certificate_arn]
+    content {
+      acm_certificate_arn      = viewer_certificate.value
+      ssl_support_method       = "sni-only"
+      minimum_protocol_version = "TLSv1.2_2021"
+    }
   }
 
 }

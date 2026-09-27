@@ -15,7 +15,9 @@ variable "aliases" {
 
 variable "certificate_arn" {
   type        = string
-  description = "ACM certificate ARN in us-east-1 covering aliases."
+  description = "ACM certificate ARN in us-east-1 covering aliases. Null uses the CloudFront default certificate and requires aliases to be empty."
+  default     = null
+  nullable    = true
 }
 
 variable "api_origin_domain_name" {
