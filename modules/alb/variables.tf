@@ -64,6 +64,17 @@ variable "ingress_cidr_blocks" {
   }
 }
 
+variable "additional_ingress_prefix_list_ids" {
+  description = "Managed prefix lists additionally allowed to reach HTTPS, such as the CloudFront origin-facing list. These deliberately do not open port 80."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for id in var.additional_ingress_prefix_list_ids : can(regex("^pl-[0-9a-f]+$", id))])
+    error_message = "Every additional_ingress_prefix_list_ids entry must be a managed prefix list ID beginning with pl-."
+  }
+}
+
 variable "idle_timeout" {
   description = "Seconds an idle connection is held open. Raise it for streaming responses; the gateway proxies long-lived model output."
   type        = number

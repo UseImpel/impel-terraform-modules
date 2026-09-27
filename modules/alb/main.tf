@@ -51,6 +51,21 @@ resource "aws_vpc_security_group_ingress_rule" "https" {
   ip_protocol = "tcp"
 }
 
+# Additional HTTPS sources are prefix lists rather than CIDRs. Keeping them
+# separate from ingress_cidr_blocks avoids opening port 80 to every source and
+# keeps one CIDR-based rule description contract unchanged.
+resource "aws_vpc_security_group_ingress_rule" "https_additional_prefix_list" {
+  for_each = local.has_https ? toset(var.additional_ingress_prefix_list_ids) : toset([])
+
+  security_group_id = aws_security_group.this.id
+  description       = "HTTPS from managed prefix list ${each.value}."
+
+  prefix_list_id = each.value
+  from_port      = 443
+  to_port        = 443
+  ip_protocol    = "tcp"
+}
+
 # Targets register by IP across the private subnets on per-service ports. The
 # task security groups are the control: each accepts traffic only from here.
 # trivy:ignore:AWS-0104 Target IPs are allocated by ECS across the private subnets and their ports differ per service, so there is no stable destination to name. Each task security group admits this one alone.
