@@ -8,6 +8,10 @@ updates:
     target-branch: main
     schedule:
       interval: weekly
+    # Let a fresh release age a week before proposing it (compromised-release
+    # window); security updates are not delayed by this.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: ci
     groups:
@@ -20,6 +24,10 @@ updates:
     target-branch: main
     schedule:
       interval: weekly
+    # Let a fresh release age a week before proposing it (compromised-release
+    # window); security updates are not delayed by this.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: ci
     groups:
@@ -34,6 +42,10 @@ updates:
     target-branch: main
     schedule:
       interval: weekly
+    # Let a fresh release age a week before proposing it (compromised-release
+    # window); security updates are not delayed by this.
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: fix
       include: scope
