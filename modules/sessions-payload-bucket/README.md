@@ -11,7 +11,7 @@ the configured key prefix and the bucket's CMK.
 module "sessions_payload_bucket" {
   source = "../../modules/sessions-payload-bucket"
 
-  name   = "impel-sessions-dev-payload-867264375510"
+  name   = "impel-sessions-dev-payload-123456789012"
   prefix = "orgs"
 }
 ```

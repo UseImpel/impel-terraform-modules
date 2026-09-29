@@ -63,3 +63,6 @@ desktop.ini
 .idea/
 .vscode/
 !.vscode/extensions.json
+
+# Release tooling (installed by plan-release with npm ci)
+.github/release-tooling/node_modules/

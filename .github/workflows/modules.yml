@@ -15,7 +15,10 @@
 #
 # On a pull request the chain stops after `quality` — there is nothing to
 # release yet. On main it continues to `publish`, which pauses for a reviewer.
-name: modules
+#
+# Supply-chain and workflow checks (secret scan, dependency review, actionlint,
+# zizmor) live in security.yml so they run even when `triage` skips `quality`.
+name: CI / Modules and release
 
 on:
   pull_request:
@@ -39,21 +42,19 @@ env:
   TF_INPUT: "false"
   TERRAFORM_VERSION: 1.14.4
   TFLINT_VERSION: v0.64.0
-  SEMVER_VERSION: 7.8.5
-  BUMP_VERSION: 12.1.0
-  BUMP_PRESET_VERSION: 9.1.0
 
 jobs:
   # ---------------------------------------------------------------------------
   # 0. triage — skip quality when the merged PR already passed it.
   #
-  # Unlike the account repositories, this one has no required status checks, so
-  # a pull request here can merge with `quality` red. The skip is therefore
-  # conditional on finding a successful run, not on the event being a push.
+  # `quality` is a required status check on main, but platform-approvers can
+  # still admin-merge past it. The skip is therefore conditional on finding a
+  # successful run, not on the event being a push.
   # ---------------------------------------------------------------------------
   triage:
     name: triage
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       checks: read
@@ -61,6 +62,11 @@ jobs:
     outputs:
       quality: ${{ steps.decide.outputs.quality }}
     steps:
+      - name: Harden the runner (audit outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         id: decide
         with:
@@ -102,7 +108,13 @@ jobs:
     needs: triage
     if: needs.triage.outputs.quality != 'skip'
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
+      - name: Harden the runner (audit outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
@@ -143,14 +155,25 @@ jobs:
 
       # Modules are not root configurations: they have no backend and no
       # provider block, so each is validated on its own with -backend=false.
-      - name: Validate modules
+      # A module with a tests/ directory also runs `terraform test` (mocked
+      # providers, plan-only: no credentials, nothing created).
+      #
+      # The plugin cache is local to this run only. It lets the modules share
+      # one provider download without an actions/cache entry that a later run
+      # on the release path would restore.
+      - name: Validate and test modules
         shell: bash
         run: |
           set -euo pipefail
+          export TF_PLUGIN_CACHE_DIR="$RUNNER_TEMP/terraform-plugin-cache"
+          mkdir -p "$TF_PLUGIN_CACHE_DIR"
           while IFS= read -r dir; do
             echo "::group::terraform validate $dir"
             terraform -chdir="$dir" init -backend=false -input=false
             terraform -chdir="$dir" validate -no-color
+            if [ -d "$dir/tests" ]; then
+              terraform -chdir="$dir" test -no-color
+            fi
             echo "::endgroup::"
           done < <(find modules -mindepth 1 -maxdepth 1 -type d | sort)
 
@@ -168,6 +191,19 @@ jobs:
           scan-ref: .
           format: table
           severity: HIGH,CRITICAL
+          exit-code: "1"
+
+      # The only package manifest here is the release tooling's lockfile. A
+      # vulnerable transitive dependency there runs with a release-path token.
+      - name: Trivy (release tooling dependencies)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .github/release-tooling
+          scanners: vuln
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
           exit-code: "1"
 
       - name: Checkov
@@ -198,12 +234,18 @@ jobs:
       && needs.quality.result != 'failure'
       && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       release: ${{ steps.plan.outputs.release }}
       version: ${{ steps.plan.outputs.version }}
       previous: ${{ steps.plan.outputs.previous }}
       bump: ${{ steps.plan.outputs.bump }}
     steps:
+      - name: Harden the runner (audit outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
       # Full history and tags: the bump is computed from the commit range since
       # the most recent tag, so a shallow clone would silently see nothing.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -228,12 +270,13 @@ jobs:
         with:
           node-version: 22
 
+      # `npm ci` against a committed lockfile: every transitive dependency is
+      # pinned and integrity-checked, and install scripts are not run. A bare
+      # `npm install -g pkg@x.y.z` pins the top level only.
       - name: Install version tooling
         run: |
-          npm install -g --no-fund --no-audit \
-            "semver@${SEMVER_VERSION}" \
-            "conventional-recommended-bump@${BUMP_VERSION}" \
-            "conventional-changelog-conventionalcommits@${BUMP_PRESET_VERSION}"
+          npm ci --prefix .github/release-tooling --ignore-scripts --no-fund --no-audit
+          echo "$GITHUB_WORKSPACE/.github/release-tooling/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Compute version
         id: plan
@@ -367,22 +410,35 @@ jobs:
       && needs.plan-release.result != 'failure'
       && needs.plan-release.outputs.release == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment: release
     permissions:
       contents: read
     steps:
-      - uses: actions/create-github-app-token@v3.2.0
+      - name: Harden the runner (audit outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
+      # Scoped to contents:write (tag + release) even though that is all the
+      # App is granted today, so widening the App later does not silently
+      # widen this token. The client ID is a `release` environment variable,
+      # the private key an environment secret: neither exists outside this job.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: app-token
         with:
-          client-id: ${{ secrets.RELEASE_APP_CLIENT_ID }}
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
 
       # Tags as well as history: the release-notes range below checks whether
-      # the previous tag is present before referring to it.
+      # the previous tag is present before referring to it. No credentials are
+      # left in .git/config: the App token is handed to the one `git push`
+      # that needs it, and to nothing else.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.sha }}
-          token: ${{ steps.app-token.outputs.token }}
+          persist-credentials: false
           fetch-depth: 0
           fetch-tags: true
 
@@ -394,12 +450,16 @@ jobs:
       - name: Create tag
         env:
           VERSION: ${{ needs.plan-release.outputs.version }}
+          APP_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
           git config user.name "impel-release-bot[bot]"
           git config user.email "impel-release-bot[bot]@users.noreply.github.com"
           git tag -a "$VERSION" "$GITHUB_SHA" -m "$VERSION"
-          git push origin "$VERSION"
+          auth=$(printf 'x-access-token:%s' "$APP_TOKEN" | base64 -w0)
+          echo "::add-mask::${auth}"
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${auth}" \
+            push origin "refs/tags/${VERSION}"
 
       # Never overwrite an existing release: consumers pin by tag, so a moved
       # release would hand them different code under a version they already
@@ -454,10 +514,16 @@ jobs:
       always() && github.event_name != 'pull_request'
       && (needs.plan-release.outputs.release == 'true' || needs.quality.result == 'failure')
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: write
     steps:
+      - name: Harden the runner (audit outbound calls)
+        uses: step-security/harden-runner@fe104658747b27e96e4f7e80cd0a94068e53901d # v2.16.1
+        with:
+          egress-policy: audit
+
       - uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           QUALITY_RESULT: ${{ needs.quality.result }}
