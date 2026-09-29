@@ -37,11 +37,31 @@ Identity: `github-deploy-role`.
 
 Each module documents its inputs and outputs in its own README.
 
+## Releases
+
+`main` is the only long-lived branch. Merging a PR to `main` runs
+`CI / Modules and release` (`.github/workflows/modules.yml`), which derives the
+next version from the Conventional Commit PR title, pauses on the `release`
+environment for a platform-approver, then creates an immutable annotated tag
+and a GitHub Release as `impel-release-bot`. A tag ruleset blocks every other
+way of creating, moving or deleting `v*` tags. Details: `AGENTS.md` and
+`.github/RELEASE_SETUP.md`.
+
 ## Checks
+
+CI runs, per module: `terraform fmt`, `terraform validate`, `terraform test`
+(modules with `tests/`), TFLint, Trivy (config), Checkov; and repo-wide:
+gitleaks (full history), actionlint, zizmor and dependency review.
 
 ```sh
 pre-commit run --all-files
 terraform -chdir=modules/vpc init -backend=false
 terraform -chdir=modules/vpc validate
+terraform -chdir=modules/meets-service test
 tflint --recursive
 ```
+
+## Security
+
+This repository is public. Report vulnerabilities privately; see
+[SECURITY.md](SECURITY.md).

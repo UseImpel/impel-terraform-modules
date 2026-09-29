@@ -31,12 +31,18 @@ Then:
 2. Note the **Client ID** from the App's settings page.
 3. **Generate a private key** and download the `.pem`.
 
-In this repository's Settings → Secrets and variables → Actions:
+In this repository's Settings → Environments → `release` (environment-scoped,
+so only the gated `publish` job can read them):
 
 | Kind | Name | Value |
 |---|---|---|
-| Variable | `RELEASE_APP_CLIENT_ID` | the App's Client ID |
+| Variable | `RELEASE_APP_CLIENT_ID` | the App's Client ID (`Iv23lii1alJzB4CoVUid`) |
 | Secret | `RELEASE_APP_PRIVATE_KEY` | the whole `.pem`, including the BEGIN/END lines |
+
+```sh
+gh variable set RELEASE_APP_CLIENT_ID -R UseImpel/impel-terraform-modules -e release -b Iv23lii1alJzB4CoVUid
+gh secret set RELEASE_APP_PRIVATE_KEY -R UseImpel/impel-terraform-modules -e release < impel-release-bot.pem
+```
 
 Delete the downloaded `.pem` afterwards. It can be regenerated; a copy sitting
 in `~/Downloads` is a tag-signing credential for the estate.
@@ -51,7 +57,8 @@ Settings → Environments → **New environment** → `release`.
 - **Required reviewers:** `@UseImpel/platform-approvers`
 - **Prevent self-review:** *off* — matching `aws-dev` in `impel-infra-dev`, so a
   release never waits on a second person being awake.
-- **Deployment branches:** *Selected branches* → `main`
+- **Deployment branches:** *Protected branches only* (only `main` is
+  protected), or *Selected branches* → `main`
 
 That last one is not optional. Without it a `workflow_dispatch` from any branch
 reaches the gate, and an approver who is only glancing at the version number

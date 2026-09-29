@@ -27,7 +27,7 @@ module "ecr_gateway" {
   source = "../../modules/ecr-repo"
 
   name             = "impel-gateway/sea"
-  pull_account_ids = ["867264375510"]
+  pull_account_ids = ["123456789012"]
 }
 ```
 

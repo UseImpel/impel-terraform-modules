@@ -2,17 +2,18 @@
 #
 #   pre-commit run --all-files
 #
-# Deeper checks (validate, tflint, trivy, checkov) run in CI — see
-# .github/workflows/modules.yml.
+# Deeper checks (validate, terraform test, tflint, trivy, checkov) run in CI —
+# see .github/workflows/modules.yml; secret scanning and workflow linting in
+# .github/workflows/security.yml. Hook revisions are pinned to commit SHAs.
 
 repos:
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.108.1
+    rev: bf9dd9c695ddaf238af36f179049202358ec22b7 # frozen: v1.108.1
     hooks:
       - id: terraform_fmt
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # frozen: v6.0.0
     hooks:
       - id: trailing-whitespace
       - id: end-of-file-fixer

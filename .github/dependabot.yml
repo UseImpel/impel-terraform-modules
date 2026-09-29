@@ -1,0 +1,42 @@
+# Weekly, grouped update PRs against main. Every PR still goes through the
+# modules pipeline; a merged update that changes module source is released by
+# the normal plan-release -> publish path (conventional title decides the bump).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: main
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Release tooling used by plan-release (semver + conventional-recommended-bump).
+  - package-ecosystem: npm
+    directory: /.github/release-tooling
+    target-branch: main
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: ci
+    groups:
+      release-tooling:
+        patterns: ["*"]
+
+  # Provider constraints in modules/*/versions.tf. A constraint bump changes
+  # what consumers resolve, so these PRs are `fix(deps)` and cut a patch release.
+  - package-ecosystem: terraform
+    directories:
+      - /modules/*
+    target-branch: main
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: fix
+      include: scope
+    groups:
+      terraform-providers:
+        patterns: ["*"]
