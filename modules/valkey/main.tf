@@ -1,8 +1,8 @@
 # Valkey replication group: single node group, encryption at rest and in
 # transit, auth token, optional multi-AZ with automatic failover.
 #
-# Not a substitute for Next's MemoryDB cluster (ioredis.Cluster + ACL user
-# impel-next). Gateway and identity use this module; Next uses modules/memorydb.
+# Not a substitute for a MemoryDB cluster (cluster mode, ACL users). Gateway
+# and identity use this module.
 
 locals {
   # Family is the major version with no dot: 8.0 -> valkey8.

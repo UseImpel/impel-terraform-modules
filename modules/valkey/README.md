@@ -43,9 +43,9 @@ container_secrets = {
 
 ## Not a MemoryDB stand-in
 
-Next's production cache is MemoryDB (`ioredis.Cluster`, ACL user `impel-next`). That contract
-lives in [`memorydb`](../memorydb/). This module is cluster-mode off with a default AUTH token
-and is for gateway and identity only.
+This module is cluster-mode off with a default AUTH token and is for gateway and identity
+only. It does not provide MemoryDB's cluster mode or ACL users. The former `memorydb` module
+(for Next) was removed after v2.5.0; tags up to v2.5.0 still carry it.
 
 ## The auth token
 
