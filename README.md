@@ -26,14 +26,15 @@ consumer PR; that PR owns the resulting plan.
 
 Networking: `vpc`, `alb`, `acm-certificate`, `private-dns-namespace`.
 
-Compute: `ecs-cluster`, `ecs-service`, `meets-service`, `engine-tasks`,
-`workflow-bootstrap`, `ssm-bastion`.
+Compute: `ecs-cluster`, `ecs-service`, `meets-service`, `ssm-bastion`.
 
-Data and storage: `aurora-serverless`, `valkey`, `memorydb`, `efs-volume`,
-`app-bucket`, `artifacts-bucket`, `sessions-payload-bucket`, `ecr-repo`,
-`service-secret`, `inbound-events`, `work-queue`.
+Data and storage: `aurora-serverless`, `rds-postgres`, `valkey`, `efs-volume`,
+`app-bucket`, `sessions-payload-bucket`, `ecr-repo`, `service-secret`,
+`inbound-events`.
 
-Identity: `github-deploy-role`.
+Edge delivery: `cloudfront-spa-api`.
+
+Identity: `github-deploy-role`, `github-static-site-deploy-role`.
 
 Each module documents its inputs and outputs in its own README.
 
