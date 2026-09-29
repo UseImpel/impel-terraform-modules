@@ -19,8 +19,10 @@ updates:
         patterns: ["*"]
 
   # Release tooling used by plan-release (semver + conventional-recommended-bump).
+  # Lives outside .github/: Dependabot's token may not write under .github/
+  # unless the change is a workflow file, so updates there fail with a 400.
   - package-ecosystem: npm
-    directory: /.github/release-tooling
+    directory: /tools/release
     target-branch: main
     schedule:
       interval: weekly

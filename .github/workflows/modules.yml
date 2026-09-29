@@ -199,7 +199,7 @@ jobs:
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
-          scan-ref: .github/release-tooling
+          scan-ref: tools/release
           scanners: vuln
           format: table
           severity: HIGH,CRITICAL
@@ -275,8 +275,8 @@ jobs:
       # `npm install -g pkg@x.y.z` pins the top level only.
       - name: Install version tooling
         run: |
-          npm ci --prefix .github/release-tooling --ignore-scripts --no-fund --no-audit
-          echo "$GITHUB_WORKSPACE/.github/release-tooling/node_modules/.bin" >> "$GITHUB_PATH"
+          npm ci --prefix tools/release --ignore-scripts --no-fund --no-audit
+          echo "$GITHUB_WORKSPACE/tools/release/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Compute version
         id: plan
