@@ -73,5 +73,5 @@ configuration — that direction creates a dependency cycle. In that case leave
 the `ecs-service` module's `data_store_ingress`.
 
 The application username is `impel-next` and is hardcoded in Next
-(`src/lib/storage/aws-redis.ts`). Changing `user_name` without changing the
-app will fail cache health checks.
+(`src/lib/storage/aws-redis.ts` in `UseImpel-Archive/next`, archived 2026-09-29).
+Changing `user_name` without changing the app will fail cache health checks.

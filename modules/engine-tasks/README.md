@@ -10,7 +10,9 @@ ends.
 Terraform port of the engine fleet in code-intelligence
 `infra/aws/lib/runtime-stack.ts` — the `engineTask()` helper, the
 engine/checkout security groups, and the RunTask grants on the query and
-worker task roles.
+worker task roles. That repository was archived as
+`UseImpel-Archive/code-intelligence` on 2026-09-29, when the standalone
+code-intelligence plane was decommissioned.
 
 ## Pull authority
 
