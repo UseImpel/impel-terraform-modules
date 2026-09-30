@@ -228,6 +228,8 @@ container_dependencies = [
 ```
 
 Sidecar secrets are included in the execution-role permissions automatically.
+The grant is the distinct set of secret ARNs across every container, so two
+containers may use the same environment-variable name for different secrets.
 Use `container_stop_timeout` and each sidecar's `stop_timeout` for workloads
 that need a bounded graceful shutdown.
 
