@@ -4,7 +4,18 @@
 data "aws_region" "current" {}
 
 locals {
-  nat_gateway_count = var.single_nat_gateway ? 1 : length(var.availability_zones)
+  # One NAT per VPC, or one per AZ. The count is the same in both nat_mode
+  # values, so switching modes never changes how many public IPs there are.
+  nat_count = var.single_nat_gateway ? 1 : length(var.availability_zones)
+
+  nat_gateway_mode  = var.nat_mode == "gateway"
+  nat_instance_mode = var.nat_mode == "instance"
+
+  # Elastic IPs the NATs send from: the caller's, when it passes allocation
+  # IDs, otherwise the module's own aws_eip.nat. The module's EIPs exist in
+  # both modes, so switching nat_mode keeps the same public addresses.
+  nat_eip_allocation_ids = length(var.nat_eip_allocation_ids) > 0 ? var.nat_eip_allocation_ids : aws_eip.nat[*].id
+  nat_public_ips         = length(var.nat_eip_allocation_ids) > 0 ? data.aws_eip.provided[*].public_ip : aws_eip.nat[*].public_ip
 }
 
 resource "aws_vpc" "this" {
@@ -63,8 +74,8 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_eip" "nat" {
-  #checkov:skip=CKV2_AWS_19:False positive on the checkov 2.0.930 image CI pins. Each EIP is attached to the NAT gateway below; that version only looks for an EC2 instance attachment.
-  count = local.nat_gateway_count
+  #checkov:skip=CKV2_AWS_19:False positive on the checkov 2.0.930 image CI pins. Each EIP is attached to the NAT gateway below, or in nat_mode "instance" to the NAT instance's primary network interface by the instance itself at boot; that version only looks for a Terraform-declared EC2 instance attachment.
+  count = length(var.nat_eip_allocation_ids) > 0 ? 0 : local.nat_count
 
   domain = "vpc"
 
@@ -73,10 +84,16 @@ resource "aws_eip" "nat" {
   }
 }
 
-resource "aws_nat_gateway" "this" {
-  count = local.nat_gateway_count
+data "aws_eip" "provided" {
+  count = length(var.nat_eip_allocation_ids)
 
-  allocation_id = aws_eip.nat[count.index].id
+  id = var.nat_eip_allocation_ids[count.index]
+}
+
+resource "aws_nat_gateway" "this" {
+  count = local.nat_gateway_mode ? local.nat_count : 0
+
+  allocation_id = local.nat_eip_allocation_ids[count.index]
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
@@ -119,12 +136,15 @@ resource "aws_route_table" "private" {
   }
 }
 
+# Switching nat_mode changes only the target of these routes, in place
+# (ReplaceRoute). Subnets, route tables and their associations stay put.
 resource "aws_route" "private_default" {
   count = length(aws_route_table.private)
 
   route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id         = aws_nat_gateway.this[var.single_nat_gateway ? 0 : count.index].id
+  nat_gateway_id         = local.nat_gateway_mode ? aws_nat_gateway.this[var.single_nat_gateway ? 0 : count.index].id : null
+  network_interface_id   = local.nat_instance_mode ? aws_network_interface.nat[var.single_nat_gateway ? 0 : count.index].id : null
 }
 
 resource "aws_route_table_association" "private" {

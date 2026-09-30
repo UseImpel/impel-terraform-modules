@@ -34,6 +34,31 @@ output "s3_gateway_prefix_list_id" {
 }
 
 output "nat_gateway_public_ips" {
-  description = "Elastic IPs of the NAT gateways. These are the addresses outbound traffic appears from, for allowlisting with third parties."
-  value       = aws_eip.nat[*].public_ip
+  description = "Elastic IPs the NATs send from, in either nat_mode (the name predates nat_mode). These are the addresses outbound traffic appears from, for allowlisting with third parties."
+  value       = local.nat_public_ips
+}
+
+output "nat_eip_allocation_ids" {
+  description = "Allocation IDs of the Elastic IPs the NATs send from: the caller's nat_eip_allocation_ids, or the module's own."
+  value       = local.nat_eip_allocation_ids
+}
+
+output "nat_mode" {
+  description = "The NAT implementation in use: \"gateway\" or \"instance\"."
+  value       = var.nat_mode
+}
+
+output "nat_gateway_ids" {
+  description = "Managed NAT gateway IDs. Empty in nat_mode \"instance\"."
+  value       = aws_nat_gateway.this[*].id
+}
+
+output "nat_instance_network_interface_ids" {
+  description = "Static ENIs the private routes target in nat_mode \"instance\" (for alarms on the NAT's traffic). Empty in nat_mode \"gateway\"."
+  value       = aws_network_interface.nat[*].id
+}
+
+output "nat_instance_autoscaling_group_names" {
+  description = "Auto Scaling groups running the fck-nat instances in nat_mode \"instance\". Empty in nat_mode \"gateway\"."
+  value       = aws_autoscaling_group.nat[*].name
 }

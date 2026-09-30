@@ -1,0 +1,37 @@
+#!/bin/bash
+# fck-nat configuration for ${name}. Rendered by the vpc module; do not edit
+# on the instance, the next replacement discards it.
+#
+# fck-nat attaches the static ENI (the private route tables' target) as the
+# second interface and associates the NAT's Elastic IP with this instance's
+# primary interface, the one it masquerades out of. It tries the association
+# once. The loop below retries it: while nat_mode switches from "gateway", the
+# NAT gateway still holds the address until AWS finishes deleting it.
+set -u
+
+cat > /etc/fck-nat.conf <<CONF
+eni_id=${eni_id}
+eip_id=${eip_allocation_id}
+CONF
+
+systemctl restart fck-nat
+
+token="$(curl -sS -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 300' http://169.254.169.254/latest/api/token)"
+mac="$(curl -sS -H "X-aws-ec2-metadata-token: $token" http://169.254.169.254/latest/meta-data/mac)"
+primary_eni="$(curl -sS -H "X-aws-ec2-metadata-token: $token" "http://169.254.169.254/latest/meta-data/network/interfaces/macs/$mac/interface-id")"
+
+attempt=0
+while [ "$attempt" -lt 90 ]; do
+  current="$(aws ec2 describe-addresses --region '${region}' --allocation-ids '${eip_allocation_id}' --query 'Addresses[0].NetworkInterfaceId' --output text 2>/dev/null || true)"
+  if [ "$current" = "$primary_eni" ]; then
+    echo "fck-nat: ${eip_allocation_id} is on $primary_eni"
+    exit 0
+  fi
+  echo "fck-nat: ${eip_allocation_id} is on '$current', associating with $primary_eni (attempt $attempt)"
+  aws ec2 associate-address --region '${region}' --allocation-id '${eip_allocation_id}' --network-interface-id "$primary_eni" --allow-reassociation || true
+  attempt=$((attempt + 1))
+  sleep 10
+done
+
+echo "fck-nat: gave up associating ${eip_allocation_id} after 15 minutes; egress is leaving from the instance's auto-assigned address" >&2
+exit 1
