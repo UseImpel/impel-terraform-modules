@@ -45,6 +45,11 @@ data "aws_ami" "fck_nat" {
   }
 }
 
+# Security group and rule descriptions are validated by EC2 only at apply: they
+# must be under 256 characters from a-zA-Z0-9, space and ._-:/()#,@[]+=&;{}!$*
+# (no apostrophes, quotes or dashes other than a plain hyphen). A bad one plans
+# cleanly and then fails the apply half way through; tests/nat_mode.tftest.hcl
+# and tools/check-sg-descriptions.py check them before that.
 resource "aws_security_group" "nat_instance" {
   count = local.nat_instance_mode ? 1 : 0
 
@@ -73,7 +78,7 @@ resource "aws_vpc_security_group_egress_rule" "nat_instance_all" {
   count = local.nat_instance_mode ? 1 : 0
 
   security_group_id = aws_security_group.nat_instance[0].id
-  description       = "Translated traffic out to the internet, plus the instance's own calls to EC2 and SSM."
+  description       = "Translated traffic out to the internet, plus the NAT instance calls to EC2 and SSM."
 
   cidr_ipv4   = "0.0.0.0/0"
   ip_protocol = "-1"
@@ -279,6 +284,15 @@ resource "aws_launch_template" "nat" {
 # instance refresh that terminates the instance and then launches its
 # replacement: the static ENI can only be attached to one instance at a time.
 # Expect the same 2-3 minute egress gap; apply such changes in a quiet window.
+#
+# The group is created seconds after its instance profile, and a new instance
+# profile takes a few seconds to propagate through IAM. The first launch can
+# therefore fail with "Authentication Failure" and the group retries it on its
+# own a minute later. By default the provider fails the apply on the first
+# failed scaling activity, leaving a working group tainted in state (the next
+# apply would replace it, with another egress gap). ignore_failed_scaling_activities
+# lets it keep waiting, for up to wait_for_capacity_timeout, for the retry: a
+# launch that keeps failing (a bad image, say) still fails the apply then.
 resource "aws_autoscaling_group" "nat" {
   count = local.nat_instance_count
 
@@ -289,6 +303,9 @@ resource "aws_autoscaling_group" "nat" {
   vpc_zone_identifier       = [aws_subnet.public[count.index].id]
   health_check_type         = "EC2"
   health_check_grace_period = 120
+
+  ignore_failed_scaling_activities = true
+  wait_for_capacity_timeout        = "10m"
 
   launch_template {
     id      = aws_launch_template.nat[count.index].id

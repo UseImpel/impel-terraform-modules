@@ -233,6 +233,63 @@ run "instance_mode_keeps_the_eip_and_routes_to_a_static_eni" {
   }
 }
 
+# EC2 accepts a security group or rule description only if it is under 256
+# characters from a-zA-Z0-9, space and ._-:/()#,@[]+=&;{}!$*, and says so only
+# at apply: v2.9.0 planned cleanly and then failed the dev apply half way
+# through on an apostrophe. These are the rendered descriptions, so var.name is
+# included.
+run "security_group_descriptions_are_ones_ec2_accepts" {
+  command = plan
+
+  variables {
+    nat_mode = "instance"
+  }
+
+  assert {
+    condition = alltrue([
+      for d in [
+        aws_security_group.endpoints.description,
+        aws_vpc_security_group_ingress_rule.endpoints_https.description,
+        aws_vpc_security_group_egress_rule.endpoints_all.description,
+        aws_security_group.nat_instance[0].description,
+        aws_vpc_security_group_ingress_rule.nat_instance_from_vpc[0].description,
+        aws_vpc_security_group_egress_rule.nat_instance_all[0].description,
+      ] : can(regex("^[a-zA-Z0-9. _:/()#,@+=&;{}!$*\\[\\]-]{1,255}$", d))
+    ])
+    error_message = "A security group or rule description has a character EC2 rejects, or is 256 characters or more."
+  }
+
+  # The pattern itself must reject what EC2 rejects (the v2.9.0 apostrophe, an
+  # en dash, a ">", 256 characters) and accept the rule EC2 did accept, or the
+  # assertion above proves nothing.
+  assert {
+    condition = (
+      !can(regex("^[a-zA-Z0-9. _:/()#,@+=&;{}!$*\\[\\]-]{1,255}$", "${aws_vpc_security_group_egress_rule.nat_instance_all[0].description} the instance's own")) &&
+      !can(regex("^[a-zA-Z0-9. _:/()#,@+=&;{}!$*\\[\\]-]{1,255}$", "${aws_vpc_security_group_egress_rule.nat_instance_all[0].description} \u2013 internet")) &&
+      !can(regex("^[a-zA-Z0-9. _:/()#,@+=&;{}!$*\\[\\]-]{1,255}$", "${aws_vpc_security_group_egress_rule.nat_instance_all[0].description} a -> b")) &&
+      !can(regex("^[a-zA-Z0-9. _:/()#,@+=&;{}!$*\\[\\]-]{1,255}$", "${aws_vpc_security_group_egress_rule.nat_instance_all[0].description}${join("", [for i in range(256) : "x"])}")) &&
+      can(regex("^[a-zA-Z0-9. _:/()#,@+=&;{}!$*\\[\\]-]{1,255}$", "NAT instance forwards private-subnet egress to the internet (temporary manual rule pending module fix)"))
+    )
+    error_message = "The description pattern no longer matches EC2's rule."
+  }
+}
+
+run "instance_mode_waits_out_iam_propagation" {
+  command = plan
+
+  variables {
+    nat_mode = "instance"
+  }
+
+  assert {
+    condition = (
+      aws_autoscaling_group.nat[0].ignore_failed_scaling_activities == true &&
+      aws_autoscaling_group.nat[0].wait_for_capacity_timeout == "10m"
+    )
+    error_message = "The NAT group must wait out a first launch that fails on instance profile propagation, not fail the apply and leave the group tainted."
+  }
+}
+
 run "instance_mode_per_az" {
   command = plan
 
