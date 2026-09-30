@@ -163,6 +163,13 @@ variable "capacity_provider" {
   }
 }
 
+variable "force_new_deployment" {
+  description = "Start a fresh deployment on every service update. Required for the apply that changes capacity_provider on an existing service: the AWS provider fails the plan otherwise. With desired_count fixed at 1 and stop-then-start deploys, that apply stops the running task before its replacement starts, so expect a brief outage. False leaves the argument unset, exactly as before."
+  type        = bool
+  default     = false
+  nullable    = false
+}
+
 variable "platform_version" {
   description = "Fargate platform version."
   type        = string

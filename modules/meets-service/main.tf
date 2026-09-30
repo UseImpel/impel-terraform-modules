@@ -469,6 +469,10 @@ resource "aws_ecs_service" "this" {
     base              = 0
   }
 
+  # Null rather than false when off: callers that never set it have no value
+  # in state, and must plan no diff. See var.force_new_deployment.
+  force_new_deployment = var.force_new_deployment ? true : null
+
   platform_version = var.platform_version
 
   deployment_controller {
@@ -533,6 +537,10 @@ resource "aws_ecs_service" "continuous" {
     weight            = 1
     base              = 0
   }
+
+  # Null rather than false when off: callers that never set it have no value
+  # in state, and must plan no diff. See var.force_new_deployment.
+  force_new_deployment = var.force_new_deployment ? true : null
 
   platform_version = var.platform_version
 
