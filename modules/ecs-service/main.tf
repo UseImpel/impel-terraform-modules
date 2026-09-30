@@ -6,10 +6,23 @@ data "aws_region" "current" {}
 
 locals {
   log_group_name = coalesce(var.log_group_name, "/ecs/${var.name}/service")
-  all_container_secrets = merge(concat(
-    [var.container_secrets],
-    [for sidecar in values(var.sidecars) : sidecar.container_secrets],
-  )...)
+  # Every secret reference the task definition names, primary container and
+  # sidecars, as a list. Not merged by environment-variable name: two
+  # containers can use the same variable name for different secrets, and a
+  # merge would silently drop all but one of them from the execution-role
+  # grant. The list length depends only on map keys, so it is known at plan
+  # time even when the ARNs are not.
+  all_secret_refs = concat(
+    values(var.container_secrets),
+    flatten([for sidecar in values(var.sidecars) : values(sidecar.container_secrets)]),
+  )
+
+  # The secret ARN each reference resolves to: arn:...:secret:name-AbCdEf,
+  # without any :json-key:version-stage:version-id suffix. Distinct, so the
+  # same secret named by several containers or keys is granted once.
+  all_secret_arns = distinct([
+    for v in local.all_secret_refs : length(split(":", v)) > 6 ? join(":", slice(split(":", v), 0, 7)) : v
+  ])
 
   # Drives count on the target group, listener rule and ALB ingress rule, so it
   # must be resolvable at plan time. var.listener_arn is unknown until the load
@@ -191,15 +204,13 @@ data "aws_iam_policy_document" "execution" {
 
   # Scoped to exactly the secrets this task definition names.
   dynamic "statement" {
-    for_each = length(local.all_container_secrets) > 0 ? [1] : []
+    for_each = length(local.all_secret_refs) > 0 ? [1] : []
 
     content {
-      sid     = "ReadSecrets"
-      effect  = "Allow"
-      actions = ["secretsmanager:GetSecretValue"]
-      resources = distinct([
-        for v in values(local.all_container_secrets) : length(split(":", v)) > 6 ? join(":", slice(split(":", v), 0, 7)) : v
-      ])
+      sid       = "ReadSecrets"
+      effect    = "Allow"
+      actions   = ["secretsmanager:GetSecretValue"]
+      resources = local.all_secret_arns
     }
   }
 
