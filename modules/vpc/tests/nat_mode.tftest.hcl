@@ -272,7 +272,7 @@ run "caller_owned_eip" {
 
   variables {
     nat_mode               = "instance"
-    nat_eip_allocation_ids = ["eipalloc-0caller000000000"]
+    nat_eip_allocation_ids = ["eipalloc-0c0ffee00000000a"]
   }
 
   assert {
@@ -282,8 +282,8 @@ run "caller_owned_eip" {
 
   assert {
     condition = (
-      strcontains(base64decode(aws_launch_template.nat[0].user_data), "eip_id=eipalloc-0caller000000000") &&
-      tolist(output.nat_eip_allocation_ids) == tolist(["eipalloc-0caller000000000"]) &&
+      strcontains(base64decode(aws_launch_template.nat[0].user_data), "eip_id=eipalloc-0c0ffee00000000a") &&
+      tolist(output.nat_eip_allocation_ids) == tolist(["eipalloc-0c0ffee00000000a"]) &&
       tolist(output.nat_gateway_public_ips) == tolist(["203.0.113.10"])
     )
     error_message = "The caller's allocation must reach fck-nat, and its address the output."
@@ -294,11 +294,11 @@ run "caller_owned_eip_on_a_gateway" {
   command = plan
 
   variables {
-    nat_eip_allocation_ids = ["eipalloc-0caller000000000"]
+    nat_eip_allocation_ids = ["eipalloc-0c0ffee00000000a"]
   }
 
   assert {
-    condition     = length(aws_eip.nat) == 0 && aws_nat_gateway.this[0].allocation_id == "eipalloc-0caller000000000"
+    condition     = length(aws_eip.nat) == 0 && aws_nat_gateway.this[0].allocation_id == "eipalloc-0c0ffee00000000a"
     error_message = "The managed NAT gateway must also accept a caller-owned EIP."
   }
 }
@@ -329,7 +329,7 @@ run "rejects_the_wrong_number_of_allocations" {
 
   variables {
     single_nat_gateway     = false
-    nat_eip_allocation_ids = ["eipalloc-0caller000000000"]
+    nat_eip_allocation_ids = ["eipalloc-0c0ffee00000000a"]
   }
 
   expect_failures = [var.nat_eip_allocation_ids]
