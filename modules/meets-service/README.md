@@ -122,6 +122,26 @@ The tradeoff is downtime on every deploy, for as long as the dependency chain ta
 healthy again — hence `health_check_grace_period` defaulting to 900 seconds rather than
 `ecs-service`'s 180.
 
+## Changing the capacity provider
+
+`capacity_provider` picks `FARGATE` (default) or `FARGATE_SPOT`. On a service that already exists,
+the AWS provider fails the plan with *"force_new_deployment should be true when
+capacity_provider_strategy is being updated"* unless `force_new_deployment = true`, so set both in
+the same change:
+
+```hcl
+capacity_provider    = "FARGATE_SPOT"
+force_new_deployment = true
+```
+
+With one task and stop-then-start deploys, that apply stops the running task before the Spot
+replacement starts: expect the same downtime as any other deploy. Spot can also reclaim the task
+with two minutes' notice, and there is no second task to carry traffic meanwhile, so Spot suits
+dev and not a meets environment that has to stay up. Once the switch has applied, leaving
+`force_new_deployment = true` makes every later service update redeploy too; set it back to
+`false` if you would rather not. Going back from `true` to `false` is an in-place update that
+triggers no deployment.
+
 ## Sizing containers, not just the task
 
 `cpu` and `memory` are the task-level totals and are required with no default — unlike
