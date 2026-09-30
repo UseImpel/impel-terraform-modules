@@ -1,8 +1,9 @@
 # app-bucket
 
 A private application bucket with its own CMK, TLS-only access, versioning, and a
-lifecycle that expires objects. The module also publishes a customer-managed IAM
-policy for the application role that reads and writes under a prefix.
+lifecycle that expires objects (or, with `retention_days = null`, keeps them).
+The module also publishes a customer-managed IAM policy for the application role
+that reads and writes under a prefix.
 
 SSE-KMS, not AES256. AES256 is required for ELB access-log delivery and is the
 wrong default here — these objects are application payloads (prompts, responses).
@@ -14,7 +15,9 @@ wrong default here — these objects are application payloads (prompts, response
 - Bucket encryption using the CMK and a bucket key
 - Bucket policy denying non-TLS
 - Lifecycle: expire current and noncurrent objects at `retention_days`, abort
-  incomplete multipart uploads after 7 days
+  incomplete multipart uploads after 7 days. `retention_days = null` keeps
+  every object and noncurrent version forever; the rule (same id,
+  `expire-objects`) then only aborts incomplete multipart uploads
 - `aws_iam_policy` for list/get/put/delete (and tagging) under `prefix`, plus
   `kms:Decrypt` / `kms:GenerateDataKey` / `kms:DescribeKey` on the CMK
 - Optional attachments of that policy to `iam_role_names`
@@ -37,6 +40,12 @@ module "gateway_log_bucket" {
   retention_days = 14
 }
 ```
+
+To keep objects forever (for example, logs the application never deletes),
+pass `retention_days = null`. Switching an existing bucket from a number to
+`null` is an in-place update of the lifecycle configuration that removes only
+the `expiration` and `noncurrent_version_expiration` actions. The default stays
+14 days, so callers that do not set it plan no change.
 
 When this stack owns the task role, attach the policy on the service:
 

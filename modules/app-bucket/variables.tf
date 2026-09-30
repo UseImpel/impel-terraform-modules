@@ -20,13 +20,15 @@ variable "prefix" {
 }
 
 variable "retention_days" {
-  description = "Days before current objects and noncurrent versions expire. Match the application's own retention."
+  description = "Days before current objects and noncurrent versions expire. Match the application's own retention. null keeps objects and noncurrent versions forever: the lifecycle rule then only aborts incomplete multipart uploads."
   type        = number
   default     = 14
+  nullable    = true
 
   validation {
-    condition     = var.retention_days >= 1 && var.retention_days <= 3650
-    error_message = "retention_days must be between 1 and 3650."
+    # try(): an explicit null must not reach the comparisons.
+    condition     = var.retention_days == null || try(var.retention_days >= 1 && var.retention_days <= 3650, false)
+    error_message = "retention_days must be null (no expiry) or between 1 and 3650."
   }
 }
 
@@ -37,7 +39,7 @@ variable "iam_role_names" {
 }
 
 variable "force_destroy" {
-  description = "Allow Terraform to delete the bucket while it still holds objects. Leave false; lifecycle expiry is what empties it."
+  description = "Allow Terraform to delete the bucket while it still holds objects. Leave false; lifecycle expiry (when retention_days is set) is what empties it."
   type        = bool
   default     = false
 }
