@@ -11,6 +11,7 @@ One Fargate service, end to end. The caller controls sizing, routing, and deploy
 - Target group (`target_type = "ip"`) and a listener rule, when `attach_load_balancer` is true
 - ECS service with circuit breaker + rollback, `100/200` deployment percentages, AZ rebalancing
 - `aws_appautoscaling_target` plus up to three target-tracking policies (CPU, memory, ALB requests)
+- Placement on `FARGATE`, `FARGATE_SPOT`, or a mixed strategy of both
 
 ## Call
 
@@ -115,6 +116,61 @@ The `ALBRequestCountPerTarget` policy needs `load_balancer_arn_suffix`. The reso
 positional string (`<lb-suffix>/<tg-suffix>`) that is not validated at apply time: get it wrong and
 the policy creates cleanly, then never fires. A `precondition` catches the missing input at plan
 time.
+
+`scale_out_cooldown` (default 60) and `scale_in_cooldown` (default 600) apply to every
+target-tracking policy. Setting `cpu_target = null` with no `memory_target` or
+`requests_per_target` leaves the scalable target in place but creates no policy, and so none of
+the CloudWatch alarms target tracking creates.
+
+## Capacity providers: on-demand floor, Spot for bursts
+
+`capacity_provider` (default `FARGATE`) runs the whole service on one provider. For a mixed
+placement, set `capacity_provider_strategy` instead; it takes precedence and `capacity_provider` is
+then ignored:
+
+```hcl
+module "gateway_service" {
+  # ...
+  # The first task always lands on on-demand FARGATE; every task beyond it
+  # goes to FARGATE_SPOT. With autoscaling_min_capacity = 2 the steady state
+  # is one on-demand task and one Spot task.
+  capacity_provider_strategy = [
+    { capacity_provider = "FARGATE", weight = 0, base = 1 },
+    { capacity_provider = "FARGATE_SPOT", weight = 1 },
+  ]
+
+  autoscaling_min_capacity = 2
+  autoscaling_max_capacity = 6
+  cpu_target               = 60
+  scale_out_cooldown       = 60
+  scale_in_cooldown        = 300
+}
+```
+
+Entries must name `FARGATE` or `FARGATE_SPOT`, each at most once; at most one entry may set `base`
+above zero (ECS allows a base on one provider only), and at least one needs a `weight` above zero.
+The cluster must offer both providers (the [`ecs-cluster`](../ecs-cluster) default does).
+
+Spot tasks get a two-minute interruption notice and are then stopped. Keep services with singleton
+state, in-memory sessions or long-lived connections that cannot be resumed entirely on `FARGATE`.
+
+**Changing placement on an existing service.** AWS provider 6.x refuses to change
+`capacity_provider_strategy` on a running service unless `force_new_deployment` is true; the plan
+fails with *"force_new_deployment should be true when capacity_provider_strategy is being
+updated"*. Setting `capacity_provider_strategy` sets `force_new_deployment = true` for you, so the change plans as an
+in-place update (`~`) of the service and ECS rolls its tasks onto the new placement under the usual
+100/200 percentages and circuit breaker. Two consequences:
+
+- `force_new_deployment` stays true afterwards, so any later in-place change to the service
+  (grace period, subnets, a new task definition revision) also rolls its tasks.
+- Changing `capacity_provider` alone on an existing service hits the provider error above. To move a
+  service wholesale, say dev onto Spot, use the strategy form:
+  `capacity_provider_strategy = [{ capacity_provider = "FARGATE_SPOT", weight = 1 }]`. Likewise, to
+  go back to a single provider after using a strategy, keep a one-entry strategy rather than
+  removing the input, which would drop `force_new_deployment` in the same plan and fail.
+
+With `capacity_provider_strategy` left empty (the default) the service renders exactly the block it
+always did and `force_new_deployment` stays unset: upgrading the module plans no change.
 
 ## Sidecars
 
