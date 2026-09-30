@@ -1,4 +1,5 @@
-# Private application bucket: CMK, TLS-only, versioned, lifecycle-expired.
+# Private application bucket: CMK, TLS-only, versioned, lifecycle-expired
+# (or kept forever when retention_days = null).
 # SSE-KMS rather than AES256 — callers put application payloads here, not ELB
 # access logs (those still have to be SSE-S3). Access logging is omitted:
 # CloudTrail data events cover the bucket, and logging it to another bucket
@@ -32,7 +33,7 @@ resource "aws_s3_bucket" "this" {
   #checkov:skip=CKV_AWS_18:This bucket holds application objects, not access logs. CloudTrail data events cover it; logging it to another bucket would recurse.
   #checkov:skip=CKV_AWS_19:False positive on the checkov 2.0.930 image CI pins. Encryption is aws_s3_bucket_server_side_encryption_configuration with aws:kms; that version does not follow the companion resource.
   #checkov:skip=CKV_AWS_21:False positive on the checkov 2.0.930 image CI pins. Versioning is aws_s3_bucket_versioning Enabled below.
-  #checkov:skip=CKV_AWS_144:Objects expire with the application's retention and are reconstructable from the origin request; cross-region replication is not worth the cost.
+  #checkov:skip=CKV_AWS_144:Callers hold application payloads that the application itself stores (logs, usage); cross-region replication is not worth the cost.
   #checkov:skip=CKV_AWS_145:False positive on the checkov 2.0.930 image CI pins. SSE-KMS is set on the encryption configuration resource, not inline on the bucket.
   #checkov:skip=CKV2_AWS_62:Event notifications have no consumer here.
   bucket        = var.name
@@ -93,12 +94,21 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
       prefix = local.lifecycle_prefix
     }
 
-    expiration {
-      days = var.retention_days
+    # retention_days = null keeps every object and noncurrent version. The
+    # rule id stays "expire-objects" so switching an existing bucket to null
+    # only removes these two blocks in place.
+    dynamic "expiration" {
+      for_each = var.retention_days == null ? [] : [var.retention_days]
+      content {
+        days = expiration.value
+      }
     }
 
-    noncurrent_version_expiration {
-      noncurrent_days = var.retention_days
+    dynamic "noncurrent_version_expiration" {
+      for_each = var.retention_days == null ? [] : [var.retention_days]
+      content {
+        noncurrent_days = noncurrent_version_expiration.value
+      }
     }
 
     abort_incomplete_multipart_upload {
