@@ -170,6 +170,23 @@ variable "force_new_deployment" {
   nullable    = false
 }
 
+variable "cpu_architecture" {
+  description = "CPU architecture of the task definition: X86_64 (default, what every task ran before this input existed) or ARM64 (Graviton, about 20% cheaper per vCPU-hour and per GB-hour). Every image in the task must be arm64 or a multi-arch index that includes linux/arm64, or tasks fail at start with an exec format error. ARM64 works on FARGATE and FARGATE_SPOT and needs platform version 1.4.0 or LATEST. Changing it registers a new task definition revision."
+  type        = string
+  default     = "X86_64"
+  nullable    = false
+
+  validation {
+    condition     = contains(["X86_64", "ARM64"], var.cpu_architecture)
+    error_message = "cpu_architecture must be X86_64 or ARM64."
+  }
+
+  validation {
+    condition     = var.cpu_architecture == "X86_64" || !can(regex("^1\\.[0-3]\\.", var.platform_version))
+    error_message = "ARM64 tasks need Fargate platform version 1.4.0 or LATEST; platform versions before 1.4.0 run X86_64 only."
+  }
+}
+
 variable "platform_version" {
   description = "Fargate platform version."
   type        = string

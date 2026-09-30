@@ -13,7 +13,7 @@ second task starting before the first stops would fight it for those mounts. Thi
 - Two IAM roles — execution (pull images, read secrets) and task (runtime identity every
   container shares)
 - Task security group, accepting the primary container's port **from the load balancer only**
-- Task definition (Fargate, `awsvpc`, X86_64/Linux) with one container per entry in `containers`,
+- Task definition (Fargate, `awsvpc`, Linux; X86_64 by default, ARM64 with `cpu_architecture`) with one container per entry in `containers`,
   and a `volume` block per entry in `volumes`; each container's `memory` renders as ECS
   `memoryReservation`, not a container-level hard `memory` limit
 - Target group (`target_type = "ip"`) and a listener rule, when `attach_load_balancer` is true
@@ -141,6 +141,31 @@ dev and not a meets environment that has to stay up. Once the switch has applied
 `force_new_deployment = true` makes every later service update redeploy too; set it back to
 `false` if you would rather not. Going back from `true` to `false` is an in-place update that
 triggers no deployment.
+
+## CPU architecture: X86_64 or ARM64
+
+`cpu_architecture` sets the task definition's `runtime_platform`. The default, `X86_64`, renders
+exactly the block the task definition always had, so upgrading the module plans no new revision.
+`ARM64` runs the task on Graviton, which Fargate bills about 20% below X86_64. It works on
+`FARGATE` and `FARGATE_SPOT` and needs platform version 1.4.0 or `LATEST`; the variable's
+validation refuses older platform versions at plan.
+
+Every container in `containers` must run on arm64 (an arm64 image, or a multi-arch index that
+includes `linux/arm64`), including third-party images such as a minio mirror. One amd64-only image
+fails the whole task at start with `exec format error`, and with `desired_count = 1` and
+stop-then-start deploys that is an outage until the rollback applies.
+
+**Postgres data on EFS needs a planned step.** A Postgres data directory carries on-disk state
+that depends on the CPU: `char` is signed on x86 and unsigned on ARM, which changes the keys
+`pg_trgm` GIN and GiST indexes hold for non-ASCII text, and Postgres 17 does not detect the
+mismatch (Postgres 18 records the signedness in the control file for this reason). Starting the
+ARM64 task on the existing volume leaves those indexes silently returning wrong results. Right
+after the switch, in a quiet window, either `REINDEX` the affected indexes (or the whole database),
+or dump the database on X86_64 and restore it on ARM64. Rehearse on dev first.
+
+The switch plans a new task definition revision and an in-place service update; like every deploy
+here, the running task stops before the ARM64 one starts. Roll back by setting `cpu_architecture`
+back to `X86_64`, and REINDEX again if the ARM64 task wrote to text indexes in the meantime.
 
 ## Sizing containers, not just the task
 

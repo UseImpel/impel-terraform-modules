@@ -7,7 +7,7 @@ One Fargate service, end to end. The caller controls sizing, routing, and deploy
 - CloudWatch log group `/ecs/<name>/service`
 - Two IAM roles — execution (pull image, read secrets) and task (runtime identity)
 - Task security group, accepting the container port **from the load balancer only**
-- Task definition (Fargate, `awsvpc`, X86_64/Linux)
+- Task definition (Fargate, `awsvpc`, Linux; X86_64 by default, ARM64 with `cpu_architecture`)
 - Target group (`target_type = "ip"`) and a listener rule, when `attach_load_balancer` is true
 - ECS service with circuit breaker + rollback, `100/200` deployment percentages, AZ rebalancing
 - `aws_appautoscaling_target` plus up to three target-tracking policies (CPU, memory, ALB requests)
@@ -171,6 +171,39 @@ in-place update (`~`) of the service and ECS rolls its tasks onto the new placem
 
 With `capacity_provider_strategy` left empty (the default) the service renders exactly the block it
 always did and `force_new_deployment` stays unset: upgrading the module plans no change.
+
+## CPU architecture: X86_64 or ARM64
+
+`cpu_architecture` sets the task definition's `runtime_platform`. The default, `X86_64`, renders
+exactly the block every task definition had before the input existed, so upgrading the module
+plans no new revision. `ARM64` runs the tasks on Graviton, which Fargate bills about 20% below
+X86_64 per vCPU-hour and per GB-hour:
+
+```hcl
+module "gateway_service" {
+  # ...
+  cpu_architecture = "ARM64"
+}
+```
+
+Before switching a service:
+
+- **Every image must run on arm64**: the primary container and every sidecar, either as an arm64
+  image or as a multi-arch index that includes `linux/arm64`. An amd64-only image fails at task
+  start with `exec format error`. With a multi-arch index, rolling back is a one-line Terraform
+  change; with an arm64-only image, rolling back needs the old image as well.
+- **Platform version 1.4.0 or `LATEST`.** Older platform versions run X86_64 only; the variable's
+  validation refuses the combination at plan.
+- **`FARGATE_SPOT` works on ARM64** (Graviton Spot, platform 1.4.0 and later), so
+  `capacity_provider`/`capacity_provider_strategy` need no change.
+- The CPU and memory combinations Fargate accepts are the same on both architectures.
+
+The switch plans a new task definition revision and an in-place service update; ECS rolls the
+tasks under the usual 100/200 percentages and circuit breaker. With `continuous_deployment = true`
+the service ignores `task_definition`, so the ARM64 revision only runs once the application
+pipeline deploys again. Check that the pipeline builds its new revision from the family's latest
+revision (which carries ARM64) and not from the revision the service is running (which would carry
+X86_64 forward). Roll back by setting `cpu_architecture` back to `X86_64`.
 
 ## Sidecars
 
