@@ -86,7 +86,13 @@ What instance mode creates, per NAT unless noted:
   `/etc/fck-nat.conf` (`eni_id`, `eip_id`) and retries the Elastic IP association for up to 15
   minutes
 - An Auto Scaling group of exactly one in that subnet (an ENI attaches only within its AZ), with
-  an instance refresh (terminate, then launch) whenever the launch template changes
+  an instance refresh (terminate, then launch) whenever the launch template changes. It sets
+  `ignore_failed_scaling_activities = true` with a 10 minute `wait_for_capacity_timeout`: the group
+  is created seconds after its instance profile, so the first launch can fail with
+  "Authentication Failure" while IAM propagates, and the group's own retry a minute later
+  succeeds. Without this the provider fails the apply on that first failure and leaves a healthy
+  group tainted, which the next apply replaces (another egress gap). A launch that keeps failing
+  still fails the apply, after 10 minutes.
 
 **Image.** By default the module resolves the exact AMI name in `nat_instance_ami_name` from the
 fck-nat publisher (`nat_instance_ami_owner`, `568608671756`). An exact name, not `most_recent`
@@ -133,6 +139,31 @@ Third parties and this estate's own security groups allowlist the NAT address
 
   The plan must show the move and no `aws_eip` create or destroy. For an EIP allocated outside
   Terraform, pass its allocation ID as-is; nothing needs importing.
+
+**Security group descriptions.** EC2 accepts a security group or rule description only if it is
+under 256 characters from `a-zA-Z0-9`, space and `._-:/()#,@[]+=&;{}!$*`, and checks only at
+apply. v2.9.0's NAT egress rule had an apostrophe: it planned cleanly, then failed the apply after
+the NAT gateway was already gone (fixed in the next patch release). `tests/nat_mode.tftest.hcl`
+asserts on this module's rendered descriptions, and `tools/check-sg-descriptions.py` (run by CI)
+checks every module's literal ones.
+
+**Recovering from v2.9.0.** If a v2.9.0 apply failed on `nat_instance_all` and the rule was then
+added by hand, import it rather than letting the next apply create a duplicate (EC2 rejects a
+second identical rule):
+
+```hcl
+import {
+  to = module.vpc.aws_vpc_security_group_egress_rule.nat_instance_all[0]
+  id = "sgr-0123456789abcdef0" # the hand-made rule
+}
+```
+
+The plan then shows the import plus an in-place description update. If the same apply also
+reported "waiting for Auto Scaling Group ... capacity satisfied: ... Authentication Failure", the
+group is tainted and the plan replaces it (2-5 minutes with no egress). When the group has a
+healthy `InService` instance, `terraform untaint 'module.vpc.aws_autoscaling_group.nat[0]'` before
+the apply avoids that; the plan then shows only an in-place update of
+`ignore_failed_scaling_activities`.
 
 ## Switching modes
 

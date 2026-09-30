@@ -153,6 +153,11 @@ jobs:
       - name: Format
         run: terraform fmt -check -recursive -diff
 
+      # EC2 rejects security group descriptions outside a small character set,
+      # but only at apply: validate, tflint and a mocked plan all pass them.
+      - name: Security group descriptions
+        run: python3 tools/check-sg-descriptions.py
+
       # Modules are not root configurations: they have no backend and no
       # provider block, so each is validated on its own with -backend=false.
       # A module with a tests/ directory also runs `terraform test` (mocked
