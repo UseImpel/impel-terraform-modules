@@ -54,6 +54,14 @@ mock_provider "aws" {
     }
   }
 
+  # Subnet IDs feed the NAT gateway, ENI and Auto Scaling group assertions;
+  # without an override they stay unknown at plan.
+  mock_resource "aws_subnet" {
+    defaults = {
+      id = "subnet-0mock00000000000"
+    }
+  }
+
   mock_resource "aws_network_interface" {
     defaults = {
       id = "eni-0static000000000000"
