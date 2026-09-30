@@ -475,6 +475,26 @@ resource "aws_lb_listener_rule" "this" {
 
 # Service
 
+locals {
+  # Empty capacity_provider_strategy renders the single-provider block every
+  # caller had before it existed, so upgrading the module is a no-op plan.
+  capacity_provider_strategy = length(var.capacity_provider_strategy) > 0 ? var.capacity_provider_strategy : [{
+    capacity_provider = var.capacity_provider
+    weight            = 1
+    base              = 0
+  }]
+
+  # AWS provider 6.x rejects a capacity_provider_strategy change on an
+  # existing service unless force_new_deployment is true (an in-place update,
+  # not a replacement), and the forced deployment is what moves running tasks
+  # onto the new placement. Null, not false, on the default path: existing
+  # state holds false for the unset attribute, and null keeps the plan empty.
+  # Once set it stays true, so any later in-place service update also starts a
+  # rolling deployment; with 100/200 deployment percentages and the circuit
+  # breaker that is a no-downtime restart.
+  force_new_deployment = length(var.capacity_provider_strategy) > 0 ? true : null
+}
+
 # Two variants of the same service, selected by var.continuous_deployment.
 # `ignore_changes` takes a static list — it cannot be built from a variable — so
 # the choice has to be made with count rather than inside one resource. Keep the
@@ -487,11 +507,18 @@ resource "aws_ecs_service" "this" {
   task_definition = aws_ecs_task_definition.this.arn
   desired_count   = var.desired_count
 
-  capacity_provider_strategy {
-    capacity_provider = var.capacity_provider
-    weight            = 1
-    base              = 0
+  dynamic "capacity_provider_strategy" {
+    for_each = local.capacity_provider_strategy
+
+    content {
+      capacity_provider = capacity_provider_strategy.value.capacity_provider
+      weight            = capacity_provider_strategy.value.weight
+      base              = capacity_provider_strategy.value.base
+    }
   }
+
+  # See local.force_new_deployment: true only with capacity_provider_strategy.
+  force_new_deployment = local.force_new_deployment
 
   platform_version = var.platform_version
 
@@ -566,11 +593,18 @@ resource "aws_ecs_service" "continuous" {
   task_definition = aws_ecs_task_definition.this.arn
   desired_count   = var.desired_count
 
-  capacity_provider_strategy {
-    capacity_provider = var.capacity_provider
-    weight            = 1
-    base              = 0
+  dynamic "capacity_provider_strategy" {
+    for_each = local.capacity_provider_strategy
+
+    content {
+      capacity_provider = capacity_provider_strategy.value.capacity_provider
+      weight            = capacity_provider_strategy.value.weight
+      base              = capacity_provider_strategy.value.base
+    }
   }
+
+  # See local.force_new_deployment: true only with capacity_provider_strategy.
+  force_new_deployment = local.force_new_deployment
 
   platform_version = var.platform_version
 

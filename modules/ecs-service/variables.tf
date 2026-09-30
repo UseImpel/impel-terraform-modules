@@ -212,13 +212,54 @@ variable "desired_count" {
 }
 
 variable "capacity_provider" {
-  description = "Capacity provider for the service. FARGATE_SPOT is cheaper but interruptible."
+  description = "Capacity provider for the service, as a single-provider strategy (weight 1, base 0). FARGATE_SPOT is cheaper but interruptible. Ignored when capacity_provider_strategy is set. Changing this on an existing service fails at plan with AWS provider 6.x (the provider requires force_new_deployment for a strategy change); use capacity_provider_strategy instead, which sets it."
   type        = string
   default     = "FARGATE"
 
   validation {
     condition     = contains(["FARGATE", "FARGATE_SPOT"], var.capacity_provider)
     error_message = "capacity_provider must be FARGATE or FARGATE_SPOT."
+  }
+}
+
+variable "capacity_provider_strategy" {
+  description = "Mixed capacity provider strategy, e.g. an on-demand floor with Spot for bursts: [{ capacity_provider = \"FARGATE\", weight = 0, base = 1 }, { capacity_provider = \"FARGATE_SPOT\", weight = 1 }]. Empty, the default, renders capacity_provider exactly as before. When set, capacity_provider is ignored and the service gets force_new_deployment = true, which AWS provider 6.x requires to change a strategy in place and which makes ECS roll the tasks onto the new placement."
+  type = list(object({
+    capacity_provider = string
+    weight            = number
+    base              = optional(number, 0)
+  }))
+  default  = []
+  nullable = false
+
+  validation {
+    condition     = alltrue([for s in var.capacity_provider_strategy : contains(["FARGATE", "FARGATE_SPOT"], s.capacity_provider)])
+    error_message = "Every capacity_provider_strategy entry must name FARGATE or FARGATE_SPOT."
+  }
+
+  validation {
+    condition     = length(distinct([for s in var.capacity_provider_strategy : s.capacity_provider])) == length(var.capacity_provider_strategy)
+    error_message = "Each capacity provider may appear in capacity_provider_strategy at most once."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.capacity_provider_strategy : s.weight >= 0 && s.weight <= 1000 && floor(s.weight) == s.weight])
+    error_message = "capacity_provider_strategy weights must be whole numbers between 0 and 1000."
+  }
+
+  validation {
+    condition     = alltrue([for s in var.capacity_provider_strategy : s.base >= 0 && s.base <= 100000 && floor(s.base) == s.base])
+    error_message = "capacity_provider_strategy base values must be whole numbers between 0 and 100000."
+  }
+
+  validation {
+    condition     = length([for s in var.capacity_provider_strategy : s if s.base > 0]) <= 1
+    error_message = "At most one capacity_provider_strategy entry may set base above zero; ECS accepts a base on one provider only."
+  }
+
+  validation {
+    condition     = length(var.capacity_provider_strategy) == 0 || anytrue([for s in var.capacity_provider_strategy : s.weight > 0])
+    error_message = "At least one capacity_provider_strategy entry needs a weight above zero, or no task beyond the base can be placed."
   }
 }
 
