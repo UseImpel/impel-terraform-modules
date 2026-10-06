@@ -3,7 +3,7 @@
   "private": true,
   "description": "Pinned tooling used by .github/workflows/modules.yml plan-release to derive the next semver tag from Conventional Commits. Installed with npm ci so every transitive dependency is locked.",
   "dependencies": {
-    "conventional-changelog-conventionalcommits": "9.1.0",
+    "conventional-changelog-conventionalcommits": "10.4.0",
     "conventional-recommended-bump": "12.1.0",
     "semver": "7.8.5"
   }
