@@ -41,7 +41,7 @@ variable "github_oidc_ids" {
 variable "deploy_branch" {
   description = "The one branch whose workflow runs may assume this role when github_environment is null. Matched exactly, so a pull request from a fork cannot deploy."
   type        = string
-  default     = "dev"
+  default     = "main"
 
   validation {
     condition     = !can(regex("[*?]", var.deploy_branch))

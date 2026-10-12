@@ -11,7 +11,7 @@ variable "github_oidc_ids" {
 }
 variable "deploy_branch" {
   type    = string
-  default = "dev"
+  default = "main"
 }
 variable "github_environment" {
   type     = string

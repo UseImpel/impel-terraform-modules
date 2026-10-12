@@ -21,7 +21,7 @@ module "gateway_deploy" {
 
   name              = "impel-gateway-dev-github-deploy"
   github_repository = "UseImpel/impel-gateway"
-  deploy_branch     = "dev"
+  deploy_branch     = "main"
 
   ecr_repository_arns = [module.service_ecr["gateway"].repository_arn]
   cluster_name         = module.ecs_cluster.cluster_name
@@ -120,13 +120,13 @@ Environment target, the workflow job must reference that exact Environment.
 The trust policy accepts one subject. For a legacy repository it is:
 
 ```
-repo:UseImpel/impel-gateway:ref:refs/heads/dev
+repo:UseImpel/impel-gateway:ref:refs/heads/main
 ```
 
 For an immutable-subject repository, it is instead:
 
 ```
-repo:UseImpel@283797627/impel-sessions@1304531882:ref:refs/heads/dev
+repo:UseImpel@283797627/impel-sessions@1304531882:ref:refs/heads/main
 ```
 
 GitHub puts the ref that triggered the run into the token and signs it. A workflow cannot claim a
