@@ -11,7 +11,7 @@ mock_provider "aws" {
 variables {
   name              = "tasks-web-dev-github"
   github_repository = "UseImpel/impel-tasks"
-  deploy_branch     = "dev"
+  deploy_branch     = "main"
   bucket_arn        = "arn:aws:s3:::tasks-web-dev-123456789012"
   distribution_arn  = "arn:aws:cloudfront::123456789012:distribution/ABC"
 }
