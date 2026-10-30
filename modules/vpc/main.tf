@@ -254,6 +254,14 @@ data "aws_iam_policy_document" "flow_logs" {
     ]
     resources = ["${aws_cloudwatch_log_group.flow_logs[0].arn}:*"]
   }
+
+  # CloudWatch Logs enforces group ARNs for group actions from 2027-04-26.
+  # Keep the existing stream grant during the region-by-region transition.
+  statement {
+    effect    = "Allow"
+    actions   = ["logs:DescribeLogStreams"]
+    resources = [aws_cloudwatch_log_group.flow_logs[0].arn]
+  }
 }
 
 resource "aws_iam_role" "flow_logs" {
