@@ -190,3 +190,22 @@ drives `count` on the target group, listener rule, and load-balancer ingress rul
 on requires `listener_arn`, `load_balancer_security_group_id`, `listener_rule_priority`, and at
 least one of `listener_rule_host_headers` / `listener_rule_path_patterns` — each checked by a
 `precondition` at plan time.
+
+## Private DNS name
+
+`service_registry_arn` registers the task's address in a Cloud Map namespace, so a peer outside the
+task (a bot host, another service) reaches it by a stable private DNS name instead of through the
+load balancer. Pass an entry from the [`private-dns-namespace`](../private-dns-namespace) module's
+`service_registry_arns`, the same input `ecs-service` takes. Null, the default, registers nothing
+and plans no change for existing callers.
+
+```hcl
+module "meets_service" {
+  # ...
+  service_registry_arn = module.platform_namespace.service_registry_arns["meets"]
+}
+```
+
+ECS answers `meets.<namespace>` with the task's ENI address. DNS is not reachability: the caller
+still adds ingress to `task_security_group_id` for each peer and port it should accept, because the
+task security group otherwise accepts traffic from the load balancer only.
