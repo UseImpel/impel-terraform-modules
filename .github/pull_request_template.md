@@ -28,7 +28,7 @@ Risk policy: `pr-risk-v1`
 
 ## Risk assessment
 
-Use `low`, `medium`, or `high`, then ` - ` and a reason.
+Use `low`, `medium`, or `high` with a reason, separated by space-hyphen-space.
 Choose one hazard class: `other`, `production-control`, or `destructive-irreversible`.
 The last two mean production IAM/network control or destructive/irreversible state operations.
 They require independent review and external human acceptance.
@@ -40,6 +40,10 @@ They require independent review and external human acceptance.
 - Rollback limits and residual risks:
 
 ## Risk adversary
+
+Require independent review for infrastructure impact, uncertain impact, high risk, or risk-policy/agent-rule changes.
+Use `needs-independent-review` when it is missing.
+Enter literal tokens without Markdown formatting; use lowercase full SHAs.
 
 Use mode `self`, `independent-agent`, or `independent-human`.
 Use state `self-reviewed`, `independent-reviewed`, or `needs-independent-review`.
@@ -70,7 +74,7 @@ Keep owner acceptance separate when present.
 
 ## Infrastructure impact
 
-Use `yes`, `no`, or `uncertain`, then ` - ` and a reason.
+Use `yes`, `no`, or `uncertain` with a reason, separated by space-hyphen-space.
 For `yes` or `uncertain`, complete all four fields below.
 For `no`, remove the four empty fields.
 Report plan-not-run gaps explicitly; a revert does not restore deleted data.
