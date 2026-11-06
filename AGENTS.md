@@ -91,3 +91,33 @@ actionlint && zizmor .github/workflows
 
 Use Terraform 1.14.x (`TERRAFORM_VERSION` in `modules.yml`); `terraform test`
 with `mock_provider` needs >= 1.7.
+
+## PR risk disclosure and adversary review
+
+- Complete the risk sections in `.github/pull_request_template.md` for every PR, including `gh` and API bodies.
+- Run a distinct adversarial pass against the actual diff, consumers, and relevant plans.
+  State the strongest failure case, response, evidence gaps, rollback limits, and residual risks.
+- Label self-review honestly.
+  Require an independent read-only agent run or non-author human review for infrastructure impact, uncertain impact, or high risk.
+  Require it for changes to the risk template, risk validator/workflow, or agent rules too.
+- Treat privilege, tenant isolation, broad outage, consequential cost, destructive state, or unclear rollback as high risk.
+  Do not select low risk or no impact to avoid review.
+- Declare hazard class exactly as `other`, `production-control`, or `destructive-irreversible`.
+  Use the latter classes for production IAM/network control or destructive/irreversible state operations.
+  They always require independent review.
+- Record the reviewer, mode, state, full reviewed head/base SHAs, and a durable independent review reference.
+  Use the PR base SHA, not merge-base.
+  Repeat or reconfirm the substantive review after material diff, base, or plan changes.
+  Never update review SHAs without the review.
+- Report missing independent review as `needs-independent-review`.
+  Do not claim merge readiness while it remains pending.
+- Expand infrastructure disclosure for `yes` or `uncertain`: resources, environments, consumers, plan/state effects, security/data/cost, rollout, rollback, and approval gates.
+  State when a plan was not run and who must resolve the gap.
+- Add `Owner acceptance: external-required` for either non-other hazard class.
+  Whenever this field is present, verify actual authorised non-author human acceptance before requesting merge.
+  A body field, agent review, or passing check never provides that acceptance.
+  Preserve existing human and protected apply gates.
+- Never invent reviewers, plans, test results, approvals, or runtime evidence.
+  Keep secrets, customer content, and raw plans out of PR text and logs.
+- Treat templates and instructions as guidance, not mechanical enforcement.
+  Complete the same disclosure manually when a harness does not load these rules.
