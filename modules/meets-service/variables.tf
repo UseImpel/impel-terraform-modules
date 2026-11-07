@@ -211,6 +211,17 @@ variable "continuous_deployment" {
   default     = false
 }
 
+variable "service_registry_arn" {
+  description = "Cloud Map service ARN to register the task's address with, from the private-dns-namespace module's service_registry_arns. Null — the default — registers nothing. Gives the task a stable DNS name inside the VPC; DNS is not reachability, so the caller still adds ingress to task_security_group_id for each peer and port."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.service_registry_arn == null || can(regex("^arn:aws[a-z-]*:servicediscovery:[a-z0-9-]+:[0-9]{12}:service/srv-[a-z0-9]+$", var.service_registry_arn))
+    error_message = "service_registry_arn must be a Cloud Map service ARN (arn:aws:servicediscovery:<region>:<account>:service/srv-...), or null."
+  }
+}
+
 variable "log_retention_days" {
   description = "Retention for the service log group."
   type        = number
