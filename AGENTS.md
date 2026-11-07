@@ -12,16 +12,19 @@ Consumers pin modules by tag (`?ref=vX.Y.Z`) from
 ## Branches, Deploys & Production Releases
 
 This follows the UseImpel infrastructure-repo convention (impel-infra-prod and
-impel-infra-dev work the same way; service repos use `dev` instead).
+impel-infra-dev work the same way). Service repositories in this rollout
+also integrate on `main`; each repository owns its delivery workflow.
 
 ### Branches
 
 - **`main` is the only long-lived branch and the default branch.** It records
   what has been released. Base every PR and worktree on `origin/main`; feature
   branches are deleted on merge.
-- `main` is protected: a PR with one approving review (code owners =
+- Required `main` policy: a PR with one approving review (code owners =
   `@UseImpel/platform-approvers`), stale reviews dismissed, linear history, and
   the `quality`, `secret-scan` and `workflow-lint` checks green.
+  Verify live rulesets and branch protection before a release; this file is not
+  evidence that the required policy is configured.
 
 ### What a release is here
 
@@ -50,9 +53,10 @@ Everything happens in `CI / Modules and release` (`.github/workflows/modules.yml
    impel-infra-prod PR. **Roll back** by reverting that consumer PR to the
    previous `?ref=`; never by moving or deleting a tag.
 
-The `release tags` tag ruleset (`refs/tags/v*`) blocks creating, updating and
-deleting release tags for everyone except `impel-release-bot`, so `publish` is
-the only path to a tag. See `.github/RELEASE_SETUP.md`.
+The required `release tags` ruleset (`refs/tags/v*`) must block creating, updating
+and deleting release tags for everyone except `impel-release-bot`. Verify this
+before publishing; do not infer live settings from workflow source. See
+`.github/RELEASE_SETUP.md`.
 
 ### Rules for agents
 

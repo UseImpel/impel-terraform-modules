@@ -44,8 +44,9 @@ Each module documents its inputs and outputs in its own README.
 `CI / Modules and release` (`.github/workflows/modules.yml`), which derives the
 next version from the Conventional Commit PR title, pauses on the `release`
 environment for a platform-approver, then creates an immutable annotated tag
-and a GitHub Release as `impel-release-bot`. A tag ruleset blocks every other
-way of creating, moving or deleting `v*` tags. Details: `AGENTS.md` and
+and a GitHub Release as `impel-release-bot`. The required tag ruleset must block
+other ways of creating, moving or deleting `v*` tags. Verify its live configuration
+before release. Details: `AGENTS.md` and
 `.github/RELEASE_SETUP.md`.
 
 ## Checks
