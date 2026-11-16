@@ -66,3 +66,4 @@ desktop.ini
 
 # Release tooling (installed by plan-release with npm ci)
 tools/release/node_modules/
+/.worktrees/
