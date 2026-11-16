@@ -515,6 +515,17 @@ resource "aws_ecs_service" "this" {
     }
   }
 
+  # Cloud Map registration, for a peer that reaches the task by DNS name
+  # rather than through the load balancer. A records on awsvpc tasks carry the
+  # ENI address, so the registry ARN is the whole configuration.
+  dynamic "service_registries" {
+    for_each = var.service_registry_arn != null ? [1] : []
+
+    content {
+      registry_arn = var.service_registry_arn
+    }
+  }
+
   tags = {
     Name = var.name
   }
@@ -576,6 +587,14 @@ resource "aws_ecs_service" "continuous" {
       target_group_arn = aws_lb_target_group.this[0].arn
       container_name   = var.primary_container_name
       container_port   = local.primary_container_port
+    }
+  }
+
+  dynamic "service_registries" {
+    for_each = var.service_registry_arn != null ? [1] : []
+
+    content {
+      registry_arn = var.service_registry_arn
     }
   }
 
